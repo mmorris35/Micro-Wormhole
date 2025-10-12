@@ -15,6 +15,16 @@ const terminalContainer = document.getElementById('terminal-container');
 const noSessionDiv = document.getElementById('no-session');
 const terminalTitle = document.getElementById('terminal-title');
 
+// Modal elements
+const modalOverlay = document.getElementById('modal-overlay');
+const newSessionBtn = document.getElementById('new-session-btn');
+const modalCloseBtn = document.getElementById('modal-close-btn');
+const cancelBtn = document.getElementById('cancel-btn');
+const newSessionForm = document.getElementById('new-session-form');
+const sessionNameInput = document.getElementById('session-name');
+const workingDirInput = document.getElementById('working-dir');
+const runAsUserSelect = document.getElementById('run-as-user');
+
 // ===== Helper Functions =====
 
 /**
@@ -149,7 +159,115 @@ function initTerminal() {
     console.log('Claude Code Monitor - Terminal initialized');
 }
 
+// ===== Modal Management =====
+
+/**
+ * Opens the new session modal with default values
+ */
+function openNewSessionModal() {
+    setDefaultSessionName();
+    setDefaultWorkingDir();
+    modalOverlay.classList.remove('hidden');
+    sessionNameInput.focus();
+}
+
+/**
+ * Closes the new session modal and resets form
+ */
+function closeNewSessionModal() {
+    modalOverlay.classList.add('hidden');
+    newSessionForm.reset();
+}
+
+/**
+ * Sets default session name with timestamp
+ */
+function setDefaultSessionName() {
+    const timestamp = new Date().toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    sessionNameInput.value = `Session ${timestamp}`;
+}
+
+/**
+ * Sets default working directory
+ */
+function setDefaultWorkingDir() {
+    workingDirInput.value = '/tmp';
+}
+
+/**
+ * Creates a new session via Socket.io
+ */
+function createSession() {
+    const name = sessionNameInput.value.trim();
+    const command = document.getElementById('session-command').value.trim();
+    const workingDirectory = workingDirInput.value.trim();
+    const runAsUser = runAsUserSelect.value;
+
+    // Validation
+    if (!name) {
+        alert('Please enter a session name');
+        return;
+    }
+    if (!command) {
+        alert('Please enter a Claude Code task');
+        return;
+    }
+    if (!workingDirectory) {
+        alert('Please enter a working directory');
+        return;
+    }
+    if (!runAsUser) {
+        alert('Please select a user');
+        return;
+    }
+
+    // Emit session:create event
+    socket.emit('session:create', {
+        name,
+        command: `claude-code "${command}"`,
+        workingDirectory,
+        runAsUser
+    });
+
+    closeNewSessionModal();
+}
+
+// ===== Event Listeners Setup =====
+
+/**
+ * Sets up all event listeners for the application
+ */
+function setupEventListeners() {
+    // New session modal
+    newSessionBtn.addEventListener('click', openNewSessionModal);
+    cancelBtn.addEventListener('click', closeNewSessionModal);
+    modalCloseBtn.addEventListener('click', closeNewSessionModal);
+
+    // Close modal when clicking outside
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) {
+            closeNewSessionModal();
+        }
+    });
+
+    // Form submission
+    newSessionForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        createSession();
+    });
+}
+
+// ===== Initialization =====
+
 // Initialize terminal on page load
 initTerminal();
+
+// Setup event listeners
+setupEventListeners();
 
 console.log('Claude Code Monitor - Session list UI loaded');
