@@ -5,6 +5,7 @@ const http = require('http');
 const path = require('path');
 require('dotenv').config();
 const logger = require('./lib/logger');
+const { db, closeDatabase } = require('./lib/database');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -114,6 +115,22 @@ app.get('/api/health', (req, res) => {
     const uptime = process.uptime();
     const memoryUsage = process.memoryUsage();
 
+    // Get database stats
+    let dbStats = { status: 'unknown' };
+    try {
+        const sessionCount = db.prepare('SELECT COUNT(*) as count FROM sessions').get();
+        dbStats = {
+            status: 'ok',
+            sessions: sessionCount.count
+        };
+    } catch (error) {
+        logger.error('Error getting database stats:', error);
+        dbStats = {
+            status: 'error',
+            error: error.message
+        };
+    }
+
     const health = {
         status: 'ok',
         timestamp: new Date().toISOString(),
@@ -129,6 +146,7 @@ app.get('/api/health', (req, res) => {
         socketio: {
             connected: io.engine.clientsCount
         },
+        database: dbStats,
         environment: NODE_ENV
     };
 
@@ -183,8 +201,10 @@ function gracefulShutdown(signal) {
         io.close(() => {
             logger.info('Socket.io connections closed');
 
-            // Additional cleanup will be added in Phase 3
-            // - Close database connections
+            // Close database connection
+            closeDatabase();
+
+            // Additional cleanup will be added later
             // - Kill PTY processes
 
             logger.info('Graceful shutdown complete');
