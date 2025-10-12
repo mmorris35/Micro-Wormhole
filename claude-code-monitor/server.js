@@ -8,6 +8,7 @@ const logger = require('./lib/logger');
 const { db, closeDatabase } = require('./lib/database');
 const sessionsDb = require('./lib/sessions-db');
 const ptyManager = require('./lib/pty-manager');
+const sessionManager = require('./lib/session-manager');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -35,19 +36,149 @@ io.on('connection', (socket) => {
     // Send welcome message
     socket.emit('message', { text: 'Connected to Claude Code Monitor' });
 
-    // Test event handler
-    socket.on('test-event', (data) => {
-        logger.info(`Test event from ${socket.id}: ${JSON.stringify(data)}`);
-        socket.emit('test-response', { received: true, echo: data });
+    // Session lifecycle events
+    socket.on('session:create', async (data) => {
+        try {
+            const { name, command, workingDirectory, runAsUser } = data;
+            const session = await sessionManager.createSession({
+                name,
+                command,
+                workingDirectory,
+                runAsUser
+            });
+            socket.emit('session:created', { session });
+            io.emit('session:list', { sessions: sessionManager.getAllSessions() });
+            logger.info(`Session created: ${session.id} by ${socket.id}`);
+        } catch (error) {
+            logger.error('Error creating session:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    socket.on('session:list', () => {
+        try {
+            const sessions = sessionManager.getAllSessions();
+            socket.emit('session:list', { sessions });
+        } catch (error) {
+            logger.error('Error listing sessions:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    socket.on('session:attach', (data) => {
+        try {
+            const { sessionId } = data;
+            const result = sessionManager.attachSession(sessionId, socket.id);
+
+            // Join Socket.io room for this session
+            socket.join(sessionId);
+
+            // Send session data and buffer
+            socket.emit('session:attached', {
+                session: result.session,
+                buffer: result.buffer,
+                connectedClients: result.connectedClients
+            });
+
+            logger.info(`Socket ${socket.id} attached to session ${sessionId}`);
+        } catch (error) {
+            logger.error('Error attaching to session:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    socket.on('session:detach', (data) => {
+        try {
+            const { sessionId } = data;
+            sessionManager.detachSession(sessionId, socket.id);
+
+            // Leave Socket.io room
+            socket.leave(sessionId);
+
+            socket.emit('session:detached', { sessionId });
+            logger.info(`Socket ${socket.id} detached from session ${sessionId}`);
+        } catch (error) {
+            logger.error('Error detaching from session:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    socket.on('session:stop', (data) => {
+        try {
+            const { sessionId } = data;
+            sessionManager.stopSession(sessionId);
+            io.to(sessionId).emit('session:status', { sessionId, status: 'stopped' });
+            logger.info(`Session stopped: ${sessionId} by ${socket.id}`);
+        } catch (error) {
+            logger.error('Error stopping session:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    socket.on('session:delete', (data) => {
+        try {
+            const { sessionId } = data;
+            sessionManager.deleteSession(sessionId);
+            io.emit('session:deleted', { sessionId });
+            io.emit('session:list', { sessions: sessionManager.getAllSessions() });
+            logger.info(`Session deleted: ${sessionId} by ${socket.id}`);
+        } catch (error) {
+            logger.error('Error deleting session:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    // Terminal I/O events
+    socket.on('terminal:input', (data) => {
+        try {
+            const { sessionId, data: inputData } = data;
+            sessionManager.writeToSession(sessionId, inputData);
+        } catch (error) {
+            logger.error('Error writing to terminal:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    socket.on('terminal:resize', (data) => {
+        try {
+            const { sessionId, cols, rows } = data;
+            sessionManager.resizeSession(sessionId, cols, rows);
+            logger.debug(`Terminal resized for session ${sessionId}: ${cols}x${rows}`);
+        } catch (error) {
+            logger.error('Error resizing terminal:', error);
+            socket.emit('error', { message: error.message });
+        }
     });
 
     socket.on('disconnect', (reason) => {
         logger.info(`Client disconnected: ${socket.id} - Reason: ${reason}`);
+
+        // Clean up: detach from all sessions
+        // (In a real implementation, you'd track which sessions this socket is attached to)
     });
 
     socket.on('error', (error) => {
         logger.error(`Socket error for ${socket.id}: ${error.message}`);
     });
+});
+
+// Forward session-manager events to Socket.io rooms
+sessionManager.on('output', (sessionId, data) => {
+    io.to(sessionId).emit('terminal:output', { sessionId, data });
+});
+
+sessionManager.on('status', (sessionId, status) => {
+    io.to(sessionId).emit('session:status', { sessionId, status });
+});
+
+sessionManager.on('exit', (sessionId, exitCode, status) => {
+    io.to(sessionId).emit('session:status', { sessionId, status });
+    io.emit('session:list', { sessions: sessionManager.getAllSessions() });
+});
+
+sessionManager.on('deleted', (sessionId) => {
+    io.emit('session:deleted', { sessionId });
+    io.emit('session:list', { sessions: sessionManager.getAllSessions() });
 });
 
 // Middleware
