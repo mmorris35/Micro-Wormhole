@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.io Test Client</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        #log {
+            border: 1px solid #3e3e42;
+            padding: 10px;
+            margin-top: 20px;
+            height: 400px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+        }
+        .log-connect { color: #4ec9b0; }
+        .log-disconnect { color: #ce9178; }
+        .log-error { color: #f48771; }
+        .log-message { color: #d4d4d4; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #007acc;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+    </style>
+</head>
+<body>
+    <h1>Socket.io Test Client</h1>
+    <div>
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <button onclick="sendTest()">Send Test Message</button>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    <div id="log"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.6.0/dist/socket.io.min.js"></script>
+    <script>
+        let socket = null;
+
+        function addLog(message, type = 'message') {
+            const log = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function connect() {
+            if (socket) {
+                addLog('Already connected', 'error');
+                return;
+            }
+
+            socket = io('http://localhost:3456');
+
+            socket.on('connect', () => {
+                addLog(`Connected with ID: ${socket.id}`, 'connect');
+            });
+
+            socket.on('disconnect', (reason) => {
+                addLog(`Disconnected: ${reason}`, 'disconnect');
+                socket = null;
+            });
+
+            socket.on('message', (data) => {
+                addLog(`Message received: ${JSON.stringify(data)}`, 'message');
+            });
+
+            socket.on('test-response', (data) => {
+                addLog(`Test response: ${JSON.stringify(data)}`, 'message');
+            });
+
+            socket.on('error', (error) => {
+                addLog(`Error: ${error}`, 'error');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                addLog('Disconnecting...', 'disconnect');
+            } else {
+                addLog('Not connected', 'error');
+            }
+        }
+
+        function sendTest() {
+            if (socket) {
+                socket.emit('test-event', { message: 'Hello from client' });
+                addLog('Sent test message', 'message');
+            } else {
+                addLog('Not connected', 'error');
+            }
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        // Auto-connect on load
+        window.onload = () => {
+            addLog('Test client loaded. Click Connect to start.', 'message');
+        };
+    </script>
+</body>
+</html>

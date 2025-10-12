@@ -14,6 +14,38 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 const app = express();
 const server = http.createServer(app);
 
+// Initialize Socket.io
+const { Server } = require('socket.io');
+const io = new Server(server, {
+    cors: {
+        origin: '*', // Since this is on private Tailscale network
+        methods: ['GET', 'POST']
+    },
+    transports: ['websocket', 'polling']
+});
+
+// Socket.io connection handling
+io.on('connection', (socket) => {
+    logger.info(`Client connected: ${socket.id} from ${socket.handshake.address}`);
+
+    // Send welcome message
+    socket.emit('message', { text: 'Connected to Claude Code Monitor' });
+
+    // Test event handler
+    socket.on('test-event', (data) => {
+        logger.info(`Test event from ${socket.id}: ${JSON.stringify(data)}`);
+        socket.emit('test-response', { received: true, echo: data });
+    });
+
+    socket.on('disconnect', (reason) => {
+        logger.info(`Client disconnected: ${socket.id} - Reason: ${reason}`);
+    });
+
+    socket.on('error', (error) => {
+        logger.error(`Socket error for ${socket.id}: ${error.message}`);
+    });
+});
+
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -27,6 +59,16 @@ app.use((req, res, next) => {
 // Routes will be added in subsequent tasks
 app.get('/', (req, res) => {
     res.send('Claude Code Monitor - Server Running');
+});
+
+// Socket.io test endpoint
+app.get('/api/test-socket', (req, res) => {
+    const connectedClients = io.engine.clientsCount;
+    res.json({
+        status: 'ok',
+        connectedClients: connectedClients,
+        message: 'Socket.io is working'
+    });
 });
 
 // 404 handler
@@ -54,7 +96,7 @@ function startServer() {
 }
 
 // Export for testing
-module.exports = { app, server, startServer };
+module.exports = { app, server, io, startServer };
 
 // Start if run directly
 if (require.main === module) {
