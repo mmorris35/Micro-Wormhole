@@ -2,14 +2,114 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Claude Code Monitor</title>
     <link rel="stylesheet" href="style.css">
+    <!-- xterm.js CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
 </head>
 <body>
-    <!-- UI will be implemented in Phase 4 -->
-    <h1>Claude Code Monitor</h1>
-    <p>Frontend coming soon...</p>
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>Claude Code Monitor</h1>
+                <button id="new-session-btn" class="btn btn-primary">New Session</button>
+            </div>
+            <div class="session-list" id="session-list">
+                <!-- Session items will be inserted here by JavaScript -->
+            </div>
+        </aside>
+
+        <!-- Main Area -->
+        <main class="main-area">
+            <!-- Terminal Header -->
+            <div class="terminal-header">
+                <span id="terminal-title" class="terminal-title">No session selected</span>
+                <div class="terminal-actions">
+                    <button id="upload-btn" class="btn btn-upload" disabled title="Upload file to session">
+                        <span>📤 Upload</span>
+                    </button>
+                    <button id="stop-btn" class="btn btn-warning" disabled>Stop</button>
+                    <button id="delete-btn" class="btn btn-danger" disabled>Delete</button>
+                </div>
+            </div>
+
+            <!-- Terminal Container -->
+            <div id="terminal-container" class="terminal-container hidden">
+                <div id="terminal"></div>
+            </div>
+
+            <!-- No Session Message -->
+            <div id="no-session" class="no-session">
+                <h2>No session selected</h2>
+                <p>Create a new session or select an existing one from the sidebar</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Session Modal -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create New Session</h2>
+                <button id="modal-close-btn" class="modal-close">&times;</button>
+            </div>
+            <form id="new-session-form" class="modal-body">
+                <div class="form-group">
+                    <label for="session-name">Session Name</label>
+                    <input type="text" id="session-name" placeholder="My Session" required>
+                </div>
+                <div class="form-group">
+                    <label for="session-command">Claude Code Task</label>
+                    <input type="text" id="session-command" placeholder="e.g., help me build a todo app" required>
+                    <small>This will be executed as: claude-code "your task"</small>
+                </div>
+                <div class="form-group">
+                    <label for="working-dir">Working Directory</label>
+                    <input type="text" id="working-dir" placeholder="/tmp" required>
+                </div>
+                <div class="form-group">
+                    <label for="run-as-user">Run as User</label>
+                    <select id="run-as-user" required>
+                        <option value="">Select user...</option>
+                        <!-- Users will be populated by JavaScript -->
+                    </select>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Session</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- File Upload Input (hidden) -->
+    <input type="file" id="file-input" style="display: none;">
+
+    <!-- Drop Overlay for File Upload -->
+    <div id="drop-overlay" class="drop-overlay hidden">
+        <div class="drop-message">
+            <h2>Drop file to upload</h2>
+            <p>File will be uploaded to session working directory</p>
+        </div>
+    </div>
+
+    <!-- Upload Progress -->
+    <div id="upload-progress" class="upload-progress hidden">
+        <div class="upload-progress-bar">
+            <div id="upload-progress-fill" class="upload-progress-fill" style="width: 0%"></div>
+        </div>
+        <div id="upload-progress-text" class="upload-progress-text">Uploading...</div>
+    </div>
+
+    <!-- CDN Scripts -->
+    <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+
+    <!-- Application Script -->
     <script src="app.js"></script>
 </body>
 </html>
