@@ -2,6 +2,7 @@
 
 const express = require('express');
 const http = require('http');
+const path = require('path');
 require('dotenv').config();
 const logger = require('./lib/logger');
 
@@ -56,10 +57,23 @@ app.use((req, res, next) => {
     next();
 });
 
-// Routes will be added in subsequent tasks
-app.get('/', (req, res) => {
-    res.send('Claude Code Monitor - Server Running');
+// Cache control for static assets
+app.use((req, res, next) => {
+    if (req.url.match(/\.(html|css|js)$/)) {
+        if (NODE_ENV === 'production') {
+            res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 day
+        } else {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        }
+    }
+    next();
 });
+
+// Serve static files from public directory
+app.use(express.static(path.join(__dirname, 'public'), {
+    index: 'index.html',
+    maxAge: NODE_ENV === 'production' ? '1d' : 0
+}));
 
 // Socket.io test endpoint
 app.get('/api/test-socket', (req, res) => {
