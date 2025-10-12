@@ -79,7 +79,7 @@
 - [x] Server handles SIGTERM/SIGINT gracefully
 - [x] Health check endpoint returns proper status
 - [x] All task branches merged to phase-2-backend-core
-- [ ] Phase branch ready to merge to main
+- [x] Phase branch ready to merge to main
 
 ---
 
