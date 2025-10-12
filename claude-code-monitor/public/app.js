@@ -1,6 +1,6 @@
 'use strict';
 
-/* global Terminal, FitAddon */
+/* global Terminal, FitAddon, io */
 
 // ===== State Variables =====
 let socket = null;
@@ -24,6 +24,11 @@ const newSessionForm = document.getElementById('new-session-form');
 const sessionNameInput = document.getElementById('session-name');
 const workingDirInput = document.getElementById('working-dir');
 const runAsUserSelect = document.getElementById('run-as-user');
+
+// Button elements
+const stopBtn = document.getElementById('stop-btn');
+const deleteBtn = document.getElementById('delete-btn');
+const uploadBtn = document.getElementById('upload-btn');
 
 // ===== Helper Functions =====
 
@@ -86,8 +91,7 @@ function renderSessions() {
 
         item.addEventListener('click', () => {
             if (currentSessionId !== session.id) {
-                // attachToSession will be implemented in Task 4.6
-                console.log('Attach to session:', session.id);
+                attachToSession(session.id);
             }
         });
 
@@ -237,6 +241,176 @@ function createSession() {
     closeNewSessionModal();
 }
 
+// ===== Session Management =====
+
+/**
+ * Loads all sessions from the server
+ */
+function loadSessions() {
+    socket.emit('session:list');
+}
+
+/**
+ * Attaches to a specific session
+ * @param {string} sessionId - The session ID to attach to
+ */
+function attachToSession(sessionId) {
+    if (currentSessionId) {
+        socket.emit('session:detach', { sessionId: currentSessionId });
+    }
+
+    currentSessionId = sessionId;
+    const session = sessions.find(s => s.id === sessionId);
+
+    if (session) {
+        terminalTitle.textContent = session.name;
+        noSessionDiv.classList.add('hidden');
+        terminalContainer.classList.remove('hidden');
+        terminal.clear();
+
+        // Enable buttons
+        stopBtn.disabled = session.status !== 'running';
+        deleteBtn.disabled = false;
+        uploadBtn.removeAttribute('disabled');
+
+        renderSessions();
+        socket.emit('session:attach', { sessionId });
+    }
+}
+
+/**
+ * Detaches from the current session
+ */
+function detachSession() {
+    if (currentSessionId) {
+        socket.emit('session:detach', { sessionId: currentSessionId });
+    }
+
+    currentSessionId = null;
+    terminalTitle.textContent = 'No session selected';
+    terminalContainer.classList.add('hidden');
+    noSessionDiv.classList.remove('hidden');
+
+    // Disable buttons
+    stopBtn.disabled = true;
+    deleteBtn.disabled = true;
+    uploadBtn.setAttribute('disabled', 'disabled');
+
+    renderSessions();
+}
+
+/**
+ * Stops the current session
+ */
+function stopSession() {
+    if (!currentSessionId) return;
+
+    if (confirm('Stop this session?')) {
+        socket.emit('session:stop', { sessionId: currentSessionId });
+    }
+}
+
+/**
+ * Deletes the current session
+ */
+function deleteSession() {
+    if (!currentSessionId) return;
+
+    if (confirm('Delete this session? This cannot be undone.')) {
+        socket.emit('session:delete', { sessionId: currentSessionId });
+    }
+}
+
+// ===== Socket.io Client =====
+
+/**
+ * Initializes Socket.io connection and event handlers
+ */
+function initSocket() {
+    socket = io();
+
+    // Connection events
+    socket.on('connect', () => {
+        console.log('Connected to server');
+        loadSessions();
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+    });
+
+    // Session list event
+    socket.on('session:list', (data) => {
+        sessions = data.sessions || [];
+        renderSessions();
+
+        // Auto-attach to first running session if none selected
+        if (!currentSessionId && sessions.length > 0) {
+            const runningSession = sessions.find(s => s.status === 'running');
+            if (runningSession) {
+                attachToSession(runningSession.id);
+            }
+        }
+    });
+
+    // Session created event
+    socket.on('session:created', (data) => {
+        sessions.push(data.session);
+        renderSessions();
+        attachToSession(data.session.id);
+    });
+
+    // Session status update event
+    socket.on('session:status', (data) => {
+        const session = sessions.find(s => s.id === data.sessionId);
+        if (session) {
+            session.status = data.status;
+            renderSessions();
+
+            // Update buttons if this is the current session
+            if (data.sessionId === currentSessionId) {
+                stopBtn.disabled = data.status !== 'running';
+            }
+        }
+    });
+
+    // Session deleted event
+    socket.on('session:deleted', (data) => {
+        sessions = sessions.filter(s => s.id !== data.sessionId);
+        renderSessions();
+
+        // Detach if this was the current session
+        if (data.sessionId === currentSessionId) {
+            detachSession();
+        }
+    });
+
+    // Session attached event
+    socket.on('session:attached', (data) => {
+        // Write buffered output to terminal
+        if (data.buffer && data.buffer.length > 0) {
+            data.buffer.forEach(line => {
+                terminal.write(line);
+            });
+        }
+    });
+
+    // Terminal output event
+    socket.on('terminal:output', (data) => {
+        if (data.sessionId === currentSessionId) {
+            terminal.write(data.data);
+        }
+    });
+
+    // Error event
+    socket.on('error', (data) => {
+        console.error('Socket.io error:', data.message);
+        alert(`Error: ${data.message}`);
+    });
+
+    console.log('Socket.io client initialized');
+}
+
 // ===== Event Listeners Setup =====
 
 /**
@@ -260,6 +434,10 @@ function setupEventListeners() {
         e.preventDefault();
         createSession();
     });
+
+    // Session action buttons
+    stopBtn.addEventListener('click', stopSession);
+    deleteBtn.addEventListener('click', deleteSession);
 }
 
 // ===== Initialization =====
@@ -267,7 +445,10 @@ function setupEventListeners() {
 // Initialize terminal on page load
 initTerminal();
 
+// Initialize Socket.io
+initSocket();
+
 // Setup event listeners
 setupEventListeners();
 
-console.log('Claude Code Monitor - Session list UI loaded');
+console.log('Claude Code Monitor - Frontend initialized');
