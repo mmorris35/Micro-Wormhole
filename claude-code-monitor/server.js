@@ -6,6 +6,7 @@ const path = require('path');
 require('dotenv').config();
 const logger = require('./lib/logger');
 const { db, closeDatabase } = require('./lib/database');
+const sessionsDb = require('./lib/sessions-db');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -165,6 +166,49 @@ app.get('/api/status', (req, res) => {
         status: 'running'
     });
 });
+
+// Session management endpoints (for testing)
+if (NODE_ENV === 'development') {
+    app.get('/api/sessions', (req, res) => {
+        try {
+            const sessions = sessionsDb.getAllSessions();
+            res.json({ sessions });
+        } catch (error) {
+            logger.error('Error getting sessions:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    app.post('/api/sessions', (req, res) => {
+        try {
+            const { name, command, workingDirectory, runAsUser } = req.body;
+            const session = sessionsDb.createSession({
+                name,
+                command,
+                workingDirectory,
+                runAsUser: runAsUser || process.env.USER
+            });
+            res.json({ session });
+        } catch (error) {
+            logger.error('Error creating session:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
+    app.delete('/api/sessions/:id', (req, res) => {
+        try {
+            const deleted = sessionsDb.deleteSession(req.params.id);
+            if (deleted) {
+                res.json({ success: true });
+            } else {
+                res.status(404).json({ error: 'Session not found' });
+            }
+        } catch (error) {
+            logger.error('Error deleting session:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+}
 
 // 404 handler
 app.use((req, res) => {
