@@ -93,6 +93,61 @@ if (NODE_ENV === 'development') {
     });
 }
 
+// Helper function to format uptime
+function formatUptime(seconds) {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    parts.push(`${secs}s`);
+
+    return parts.join(' ');
+}
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    const uptime = process.uptime();
+    const memoryUsage = process.memoryUsage();
+
+    const health = {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        uptime: {
+            seconds: Math.floor(uptime),
+            formatted: formatUptime(uptime)
+        },
+        memory: {
+            rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
+            heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+            heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`
+        },
+        socketio: {
+            connected: io.engine.clientsCount
+        },
+        environment: NODE_ENV
+    };
+
+    res.json(health);
+});
+
+// Status endpoint with version info
+app.get('/api/status', (req, res) => {
+    const packageJson = require('./package.json');
+
+    res.json({
+        name: packageJson.name,
+        version: packageJson.version,
+        description: packageJson.description,
+        node: process.version,
+        status: 'running'
+    });
+});
+
 // 404 handler
 app.use((req, res) => {
     logger.warn(`404 - Not Found: ${req.method} ${req.url}`);
@@ -149,9 +204,18 @@ function gracefulShutdown(signal) {
 // Start server
 function startServer() {
     server.listen(PORT, HOST, () => {
-        logger.info(`Server started in ${NODE_ENV} mode`);
-        logger.info(`Listening on http://${HOST}:${PORT}`);
-        logger.info('Press Ctrl+C to stop');
+        const packageJson = require('./package.json');
+
+        logger.info('='.repeat(60));
+        logger.info(`${packageJson.name} v${packageJson.version}`);
+        logger.info('='.repeat(60));
+        logger.info(`Environment: ${NODE_ENV}`);
+        logger.info(`Node version: ${process.version}`);
+        logger.info(`Listening on: http://${HOST}:${PORT}`);
+        logger.info(`Health check: http://${HOST}:${PORT}/api/health`);
+        logger.info(`Status: http://${HOST}:${PORT}/api/status`);
+        logger.info('='.repeat(60));
+        logger.info('Server ready. Press Ctrl+C to stop');
     });
 }
 
