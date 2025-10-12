@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+
+# Database
+sessions.db
+sessions.db-journal
+
+# Logs
+logs/
+*.log
+
+# Uploads
+uploads/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/

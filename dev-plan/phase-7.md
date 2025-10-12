@@ -974,7 +974,7 @@ Open in browser:
 - **Socket.io** ^4.6.0 - WebSocket communication
 - **node-pty** ^1.0.0 - Terminal emulation
 - **better-sqlite3** ^9.0.0 - SQLite database
-- **multer** ^1.4.5 - File upload handling
+- **multer** 1.4.5-lts.1 - File upload handling (CVE fix)
 - **winston** ^3.11.0 - Logging
 
 ### Frontend

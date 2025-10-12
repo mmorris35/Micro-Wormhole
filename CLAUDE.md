@@ -170,10 +170,12 @@ sessions (
   "dotenv": "^16.0.0",
   "winston": "^3.11.0",
   "winston-daily-rotate-file": "^4.7.0",
-  "multer": "^1.4.5",
+  "multer": "1.4.5-lts.1",
   "uuid": "^9.0.0"
 }
 ```
+
+**Note**: multer version 1.4.5 does not exist in npm registry. Using `1.4.5-lts.1` which fixes CVE-2022-24434 (executive decision made during Phase 1, Task 1.1).
 
 ### Frontend (CDN)
 - socket.io-client@4.6.0
@@ -419,7 +421,7 @@ See `PROGRESS.md` for complete tracking template with instructions.
 
 ## Critical Rules
 
-1. **Never substitute packages** - Use exact versions from issue #1
+1. **Never substitute packages** - Use exact versions from issue #1 (see exception handling below)
 2. **Always run quality gates** - Especially ESLint before committing
 3. **Follow git workflow** - Phase branches → Task branches → Squash merge
 4. **Update PROGRESS.md** - Mark tasks complete immediately after finishing, commit with task
@@ -430,6 +432,25 @@ See `PROGRESS.md` for complete tracking template with instructions.
 9. **Clean up temp files** - Delete from `uploads/` after copy
 10. **Use Socket.io rooms** - Broadcast terminal output to session room only
 11. **Log everything** - Use winston logger, not console.log
+
+### Exception Handling: When Reality Conflicts with Rules
+
+**IMPORTANT**: If you encounter a situation where you cannot follow the development plan or critical rules due to external factors (package doesn't exist, API changed, etc.):
+
+1. **STOP immediately** - Do not proceed with substitutions or workarounds
+2. **Document the conflict** - Clearly explain what the plan requires vs. what reality allows
+3. **Present options** - List 2-3 possible solutions with pros/cons
+4. **Ask for executive decision** - Prompt the user to make the final call
+5. **Update documentation** - Once decision is made, update all affected plan docs and this file
+
+Example conflicts that require escalation:
+- Package version doesn't exist in registry
+- Required API endpoint deprecated/removed
+- Security vulnerability in specified version
+- Breaking changes in dependency
+- File/directory structure conflicts
+
+**Do not attempt to "fix" these issues autonomously. Always escalate to user.**
 
 ## Issue #1 Reference
 

@@ -71,8 +71,10 @@ npm init -y
 #### 1.1.3: Install backend dependencies
 **Commands**:
 ```bash
-npm install express@^4.18.0 socket.io@^4.6.0 node-pty@^1.0.0 better-sqlite3@^9.0.0 dotenv@^16.0.0 winston@^3.11.0 winston-daily-rotate-file@^4.7.0 multer@^1.4.5 uuid@^9.0.0
+npm install express@^4.18.0 socket.io@^4.6.0 node-pty@^1.0.0 better-sqlite3@^9.0.0 dotenv@^16.0.0 winston@^3.11.0 winston-daily-rotate-file@^4.7.0 multer@1.4.5-lts.1 uuid@^9.0.0
 ```
+
+**Note**: multer@1.4.5 does not exist in npm. Using 1.4.5-lts.1 which fixes CVE-2022-24434.
 
 **Expected packages.json dependencies**:
 ```json
@@ -81,7 +83,7 @@ npm install express@^4.18.0 socket.io@^4.6.0 node-pty@^1.0.0 better-sqlite3@^9.0
     "better-sqlite3": "^9.0.0",
     "dotenv": "^16.0.0",
     "express": "^4.18.0",
-    "multer": "^1.4.5",
+    "multer": "1.4.5-lts.1",
     "node-pty": "^1.0.0",
     "socket.io": "^4.6.0",
     "uuid": "^9.0.0",
