@@ -451,4 +451,21 @@ initSocket();
 // Setup event listeners
 setupEventListeners();
 
+// ===== Mobile-Specific Enhancements =====
+
+// Prevent zoom on double-tap for better mobile UX
+document.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+}, { passive: false });
+
+// Add touch feedback for buttons
+document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('touchstart', () => {
+        btn.style.opacity = '0.7';
+    });
+    btn.addEventListener('touchend', () => {
+        btn.style.opacity = '1';
+    });
+});
+
 console.log('Claude Code Monitor - Frontend initialized');
