@@ -1,5 +1,7 @@
 'use strict';
 
+/* global Terminal, FitAddon */
+
 // ===== State Variables =====
 let socket = null;
 let terminal = null;
@@ -82,5 +84,72 @@ function renderSessions() {
         sessionList.appendChild(item);
     });
 }
+
+// ===== Terminal Integration =====
+
+/**
+ * Initializes the xterm.js terminal with VSCode theme
+ */
+function initTerminal() {
+    terminal = new Terminal({
+        cursorBlink: true,
+        fontSize: 13,
+        fontFamily: '\'Courier New\', Courier, monospace',
+        theme: {
+            background: '#1e1e1e',
+            foreground: '#d4d4d4',
+            cursor: '#d4d4d4',
+            cursorAccent: '#1e1e1e',
+            selection: 'rgba(255, 255, 255, 0.3)',
+            black: '#000000',
+            red: '#cd3131',
+            green: '#0dbc79',
+            yellow: '#e5e510',
+            blue: '#2472c8',
+            magenta: '#bc3fbc',
+            cyan: '#11a8cd',
+            white: '#e5e5e5',
+            brightBlack: '#666666',
+            brightRed: '#f14c4c',
+            brightGreen: '#23d18b',
+            brightYellow: '#f5f543',
+            brightBlue: '#3b8eea',
+            brightMagenta: '#d670d6',
+            brightCyan: '#29b8db',
+            brightWhite: '#ffffff'
+        }
+    });
+
+    fitAddon = new FitAddon.FitAddon();
+    terminal.loadAddon(fitAddon);
+    terminal.open(document.getElementById('terminal'));
+    fitAddon.fit();
+
+    // Handle terminal input
+    terminal.onData(data => {
+        if (currentSessionId) {
+            socket.emit('terminal:input', { sessionId: currentSessionId, data });
+        }
+    });
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        if (terminal && fitAddon) {
+            fitAddon.fit();
+            if (currentSessionId) {
+                socket.emit('terminal:resize', {
+                    sessionId: currentSessionId,
+                    cols: terminal.cols,
+                    rows: terminal.rows
+                });
+            }
+        }
+    });
+
+    console.log('Claude Code Monitor - Terminal initialized');
+}
+
+// Initialize terminal on page load
+initTerminal();
 
 console.log('Claude Code Monitor - Session list UI loaded');
