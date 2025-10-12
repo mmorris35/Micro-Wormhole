@@ -7,6 +7,7 @@ require('dotenv').config();
 const logger = require('./lib/logger');
 const { db, closeDatabase } = require('./lib/database');
 const sessionsDb = require('./lib/sessions-db');
+const ptyManager = require('./lib/pty-manager');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -248,8 +249,8 @@ function gracefulShutdown(signal) {
             // Close database connection
             closeDatabase();
 
-            // Additional cleanup will be added later
-            // - Kill PTY processes
+            // Kill all PTY processes
+            ptyManager.killAll();
 
             logger.info('Graceful shutdown complete');
             process.exit(0);
