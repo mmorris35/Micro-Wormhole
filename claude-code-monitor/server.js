@@ -85,6 +85,14 @@ app.get('/api/test-socket', (req, res) => {
     });
 });
 
+// Shutdown test endpoint (remove in production)
+if (NODE_ENV === 'development') {
+    app.post('/api/shutdown', (req, res) => {
+        res.json({ message: 'Shutdown initiated' });
+        setTimeout(() => gracefulShutdown('API_REQUEST'), 100);
+    });
+}
+
 // 404 handler
 app.use((req, res) => {
     logger.warn(`404 - Not Found: ${req.method} ${req.url}`);
@@ -100,6 +108,44 @@ app.use((err, req, res, next) => {
     });
 });
 
+// Graceful shutdown handler
+let isShuttingDown = false;
+
+function gracefulShutdown(signal) {
+    if (isShuttingDown) {
+        logger.warn('Shutdown already in progress...');
+        return;
+    }
+
+    isShuttingDown = true;
+    logger.info(`${signal} received. Starting graceful shutdown...`);
+
+    // Close HTTP server (stops accepting new connections)
+    server.close(() => {
+        logger.info('HTTP server closed');
+
+        // Close all Socket.io connections
+        io.close(() => {
+            logger.info('Socket.io connections closed');
+
+            // Additional cleanup will be added in Phase 3
+            // - Close database connections
+            // - Kill PTY processes
+
+            logger.info('Graceful shutdown complete');
+            process.exit(0);
+        });
+    });
+
+    // Force shutdown after timeout
+    const shutdownTimeout = setTimeout(() => {
+        logger.error('Forced shutdown after timeout');
+        process.exit(1);
+    }, 10000); // 10 second timeout
+
+    shutdownTimeout.unref();
+}
+
 // Start server
 function startServer() {
     server.listen(PORT, HOST, () => {
@@ -114,5 +160,20 @@ module.exports = { app, server, io, startServer };
 
 // Start if run directly
 if (require.main === module) {
+    // Register shutdown handlers
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught errors
+    process.on('uncaughtException', (error) => {
+        logger.error('Uncaught Exception:', { error: error.message, stack: error.stack });
+        gracefulShutdown('UNCAUGHT_EXCEPTION');
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+        logger.error('Unhandled Rejection:', { reason, promise });
+        gracefulShutdown('UNHANDLED_REJECTION');
+    });
+
     startServer();
 }
