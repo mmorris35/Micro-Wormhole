@@ -3,6 +3,8 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 require('dotenv').config();
 const logger = require('./lib/logger');
 const { db, closeDatabase } = require('./lib/database');
@@ -209,6 +211,40 @@ app.use(express.static(path.join(__dirname, 'public'), {
     maxAge: NODE_ENV === 'production' ? '1d' : 0
 }));
 
+// ===== File Upload Configuration =====
+
+const multer = require('multer');
+
+// Ensure uploads directory exists
+const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
+if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    logger.info(`Created uploads directory: ${UPLOAD_DIR}`);
+}
+
+// Configure multer
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, UPLOAD_DIR);
+    },
+    filename: (req, file, cb) => {
+        // Generate unique filename: timestamp-uuid-originalname
+        const uniqueSuffix = Date.now() + '-' + crypto.randomUUID();
+        cb(null, uniqueSuffix + '-' + file.originalname);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: parseInt(process.env.UPLOAD_MAX_FILE_SIZE) || 104857600 // 100MB
+    },
+    fileFilter: (req, file, cb) => {
+        // Accept all file types
+        cb(null, true);
+    }
+});
+
 // Socket.io test endpoint
 app.get('/api/test-socket', (req, res) => {
     const connectedClients = io.engine.clientsCount;
@@ -341,6 +377,76 @@ if (NODE_ENV === 'development') {
         }
     });
 }
+
+// File upload endpoint
+app.post('/api/upload/:sessionId', upload.single('file'), async (req, res) => {
+    const { sessionId } = req.params;
+    const file = req.file;
+
+    if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    try {
+        // Get session from database
+        const session = sessionsDb.getSession(sessionId);
+        if (!session) {
+            // Clean up uploaded file
+            fs.unlinkSync(file.path);
+            return res.status(404).json({ error: 'Session not found' });
+        }
+
+        // Destination path in session working directory
+        const destPath = path.join(session.working_directory, file.originalname);
+        const tempPath = file.path;
+
+        logger.info(`Uploading file to session ${sessionId}: ${file.originalname}`);
+
+        // Copy file to session directory and set ownership
+        // Phase 6 will add sudo support for different users
+        // For now, just copy the file
+        fs.copyFileSync(tempPath, destPath);
+
+        // Clean up temp file
+        fs.unlinkSync(tempPath);
+
+        logger.info(`File uploaded successfully: ${destPath}`);
+
+        // Emit event to connected clients
+        io.to(sessionId).emit('file:uploaded', {
+            sessionId,
+            filename: file.originalname,
+            path: destPath
+        });
+
+        res.json({
+            success: true,
+            filename: file.originalname,
+            path: destPath
+        });
+
+    } catch (error) {
+        logger.error(`File upload failed for session ${sessionId}:`, error);
+
+        // Clean up temp file if it exists
+        if (file && file.path && fs.existsSync(file.path)) {
+            fs.unlinkSync(file.path);
+        }
+
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Handle multer errors
+app.use((error, req, res, next) => {
+    if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ error: 'File too large (max 100MB)' });
+        }
+        return res.status(400).json({ error: error.message });
+    }
+    next(error);
+});
 
 // 404 handler
 app.use((req, res) => {
