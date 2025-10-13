@@ -1,178 +1,237 @@
 # Claude Code Monitor
 
-Web application for monitoring and interacting with Claude Code sessions from any device (especially iOS) over a Tailscale network. Supports multiple concurrent sessions, real-time terminal output, session persistence, and running sessions as different Linux users.
+Web application for monitoring and interacting with Claude Code sessions from any device over a Tailscale network.
 
 ## Features
 
-- **Multi-User Support**: Run sessions as different Linux users with proper isolation
-- **Real-Time Terminal**: Interactive terminal with xterm.js integration
-- **Session Persistence**: SQLite database stores session history
-- **File Upload**: Drag-and-drop, paste, or browse to upload files to sessions
-- **Multiple Concurrent Sessions**: Run and monitor multiple sessions simultaneously
-- **Socket.io Integration**: Real-time bidirectional communication
-- **Tailscale Ready**: Designed for secure access over Tailscale network
+- **Multi-Session Management**: Run multiple Claude Code sessions simultaneously
+- **Multi-User Support**: Each session runs as a specific Linux user with isolated credentials
+- **Real-Time Terminal**: WebSocket-based terminal with xterm.js
+- **File Upload**: Drag-and-drop, paste, or button upload (iOS compatible)
+- **Session Persistence**: SQLite database tracks all sessions
+- **Responsive UI**: Works on desktop, tablet, and mobile devices
+- **Secure**: User isolation, sudo-based process spawning, file ownership management
 
-## Quick Start
+## Screenshot
 
-### Development Setup (Quick & Dirty)
-
-```bash
-# Clone repository
-cd claude-code-monitor
-
-# Install dependencies
-npm install
-
-# Copy environment variables
-cp .env.example .env
-
-# Run as root (development only)
-sudo npm start
-
-# Open browser
-open http://localhost:3456
-```
-
-See [SUDO_QUICK_START.md](SUDO_QUICK_START.md) for production setup.
-
-## Documentation
-
-### Setup Guides
-- [SUDO_QUICK_START.md](SUDO_QUICK_START.md) - Quick setup reference
-- [SUDO_SETUP.md](SUDO_SETUP.md) - Complete sudo configuration guide
-- [ENV_VARS.md](ENV_VARS.md) - Environment variables reference
-- [INSTALLATION.md](INSTALLATION.md) - Production deployment guide (if exists)
-
-### Development
-- [DEV_PLAN.md](DEV_PLAN.md) - Development plan and phase navigation
-- [PROGRESS.md](PROGRESS.md) - Development progress tracking
-- [CLAUDE.md](CLAUDE.md) - Project instructions for Claude Code
-- [CHANGELOG.md](CHANGELOG.md) - Version history (if exists)
-
-### Troubleshooting
-- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions (if exists)
-
-## Multi-User Support
-
-This application can run Claude Code sessions as different Linux users, allowing each user to access their own:
-- GitHub credentials and SSH keys
-- Shell configuration (bashrc, zshrc, etc.)
-- Home directory and files
-- Environment variables and PATH
-
-**Important:** Requires sudo configuration. See [SUDO_SETUP.md](SUDO_SETUP.md) for complete guide.
-
-### Two Configuration Options
-
-**Option 1: Run as Root** (Development only)
-- Simple setup, no configuration needed
-- Not secure, not recommended for production
-
-**Option 2: Dedicated Service User** (Production)
-- Secure, follows principle of least privilege
-- Requires sudo configuration
-- Recommended for production use
+[Add screenshot here after deployment]
 
 ## Requirements
 
-- Node.js 16+ (recommended: 18+)
-- Linux operating system
-- Multiple user accounts (for multi-user features)
-- Sudo configuration (for production multi-user setup)
+- **Server**: Linux (Ubuntu 20.04+, Debian 11+, or similar)
+- **Node.js**: v20.0.0 or later
+- **Network**: Tailscale (recommended) or local network
+- **Users**: Multiple Linux user accounts for multi-user support
+- **Permissions**: Sudo configuration for user switching
+
+## Quick Start
+
+### 1. Install
+
+```bash
+git clone <repo-url> claude-code-monitor
+cd claude-code-monitor
+npm install
+```
+
+### 2. Configure
+
+```bash
+cp .env.example .env
+nano .env  # Edit configuration
+```
+
+### 3. Run
+
+```bash
+# Development
+npm start
+
+# Production (see INSTALLATION.md)
+sudo ./install-service.js
+```
+
+### 4. Access
+
+Open in browser:
+- Local: http://localhost:3456
+- Tailscale: http://YOUR_TAILSCALE_IP:3456
+
+## Documentation
+
+- **[INSTALLATION.md](INSTALLATION.md)** - Production installation guide
+- **[SUDO_SETUP.md](SUDO_SETUP.md)** - Multi-user sudo configuration
+- **[ENV_VARS.md](ENV_VARS.md)** - Environment variable reference
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
+- **[DEV_PLAN.md](DEV_PLAN.md)** - Development plan and tasks
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Browser UI                           │
+│  (HTML/CSS/JS + xterm.js + Socket.io-client)               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              │ WebSocket (Socket.io)
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                      Express Server                          │
+│  (Node.js + Socket.io + Multer)                             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+      ┌───────▼──────┐ ┌─────▼─────┐ ┌──────▼──────┐
+      │   SQLite     │ │  node-pty │ │ File Upload │
+      │   Database   │ │   (sudo)  │ │   (sudo)    │
+      └──────────────┘ └───────────┘ └─────────────┘
+                              │
+                    ┌─────────┼─────────┐
+                    │         │         │
+              ┌─────▼───┐ ┌──▼────┐ ┌──▼────┐
+              │ User 1  │ │ User 2│ │ User 3│
+              │ Session │ │Session│ │Session│
+              └─────────┘ └───────┘ └───────┘
+```
 
 ## Tech Stack
 
 ### Backend
-- Express 4.18+
-- Socket.io 4.6+
-- node-pty 1.0+
-- better-sqlite3 9.0+
-- Winston logging
+- **Node.js** v20.x - JavaScript runtime
+- **Express** ^4.18.0 - Web framework
+- **Socket.io** ^4.6.0 - WebSocket communication
+- **node-pty** ^1.0.0 - Terminal emulation
+- **better-sqlite3** ^9.0.0 - SQLite database
+- **multer** 1.4.5-lts.1 - File upload handling (CVE fix)
+- **winston** ^3.11.0 - Logging
 
 ### Frontend
-- Vanilla JavaScript (no framework)
-- xterm.js 5.3+ for terminal
-- Socket.io client 4.6+
-- VSCode dark theme styling
+- **Vanilla JavaScript** - No framework
+- **xterm.js** ^5.3.0 - Terminal UI
+- **Socket.io-client** ^4.6.0 - WebSocket client
 
-## Architecture
+## How It Works
 
-### Backend Structure
-```
-server.js                    # Main entry point, Express+Socket.io setup
-lib/
-  ├── logger.js              # Winston logging (console + daily rotate files)
-  ├── database.js            # better-sqlite3 initialization, sessions table
-  ├── sessions-db.js         # Session CRUD operations (data access layer)
-  ├── pty-manager.js         # PTY process manager (node-pty wrapper)
-  └── users.js               # System user enumeration (/etc/passwd parsing)
-```
+1. **Session Creation**: User selects a Linux user and provides a Claude Code task
+2. **Process Spawning**: Server spawns a bash shell as the specified user using sudo
+3. **Command Execution**: Claude Code command executed in the user's shell
+4. **Terminal Streaming**: Output streamed to browser via WebSocket
+5. **File Upload**: Files uploaded and copied to session directory with correct ownership
+6. **Session Management**: Sessions tracked in database, can be stopped/deleted
 
-### Frontend Structure
-```
-public/
-  ├── index.html             # UI structure (sidebar, terminal, modal)
-  ├── style.css              # VSCode dark theme styling
-  └── app.js                 # Socket.io client, xterm.js integration
-```
+## Multi-User Support
 
-## Security Considerations
+Each session runs as a specific Linux user, providing:
+- **Isolated Credentials**: Each user has their own GitHub credentials, SSH keys, etc.
+- **Separate Environments**: Each user's shell environment is isolated
+- **Permission Boundaries**: Users can only access their own files
+- **Correct Ownership**: Uploaded files owned by session user
 
-- **Sudo Configuration**: Limit sudo access to specific users and commands only
-- **Network Access**: Use Tailscale or VPN, don't expose directly to internet
-- **User Isolation**: Each session runs as specified user with proper file permissions
-- **No Authentication**: v1.0 does not include authentication (add if needed)
-- **Regular Updates**: Keep Node.js, dependencies, and system packages updated
+Requires sudo configuration. See [SUDO_SETUP.md](SUDO_SETUP.md).
 
-See [SUDO_SETUP.md](SUDO_SETUP.md) for complete security documentation.
+## Security
+
+- **User Isolation**: Sessions run as specified users with proper permissions
+- **Sudo Restrictions**: Limited to specific commands and users
+- **Network Security**: Designed for private networks (Tailscale)
+- **Input Validation**: User input validated before execution
+- **File Upload Limits**: 100MB maximum file size
+
+## API Endpoints
+
+### HTTP Endpoints
+- `GET /` - Frontend application
+- `GET /api/health` - Health check
+- `GET /api/status` - Server status
+- `POST /api/upload/:sessionId` - File upload
+
+### Socket.io Events
+
+**Client → Server:**
+- `users:list` - Get available users
+- `session:create` - Create new session
+- `session:list` - List all sessions
+- `session:attach` - Attach to session
+- `session:detach` - Detach from session
+- `session:stop` - Stop session
+- `session:delete` - Delete session
+- `terminal:input` - Send terminal input
+- `terminal:resize` - Resize terminal
+
+**Server → Client:**
+- `users:list` - Available users list
+- `session:created` - Session created
+- `session:list` - Sessions list
+- `session:status` - Session status changed
+- `session:deleted` - Session deleted
+- `terminal:output` - Terminal output
+- `file:uploaded` - File uploaded
+- `error` - Error message
 
 ## Development
 
-### Commands
-
+### Setup
 ```bash
-# Install dependencies
 npm install
+cp .env.example .env
+```
 
-# Start server (development)
+### Run
+```bash
 npm start
+```
 
-# Lint code
+### Lint
+```bash
 npm run lint
-
-# Lint and auto-fix
 npm run lint:fix
 ```
 
-### Git Workflow
-
-This project uses a phase-based development workflow:
-- Phase branches: `phase-N-description`
-- Task branches: `phase-N/task-N.M-description`
-- Squash merge task branches to phase branch
-- Merge commit phase branches to main
-
-See [CLAUDE.md](CLAUDE.md) for complete development guidelines.
-
-## Contributing
-
-This project follows a structured development plan. See:
-- [DEV_PLAN.md](DEV_PLAN.md) - Overall plan and navigation
-- [PROGRESS.md](PROGRESS.md) - Current progress
-- [CLAUDE.md](CLAUDE.md) - Development guidelines
+### Project Structure
+```
+claude-code-monitor/
+├── server.js              # Main server
+├── lib/                   # Backend modules
+│   ├── logger.js          # Winston logging
+│   ├── database.js        # SQLite setup
+│   ├── sessions-db.js     # Session data layer
+│   ├── pty-manager.js     # PTY process manager
+│   └── users.js           # User enumeration
+├── public/                # Frontend
+│   ├── index.html         # UI structure
+│   ├── style.css          # Styling
+│   └── app.js             # Client logic
+├── logs/                  # Log files
+├── uploads/               # Temporary uploads
+└── sessions.db            # SQLite database
+```
 
 ## License
 
-[Specify your license here]
+MIT
+
+## Contributing
+
+Contributions welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Follow the DEV_PLAN.md structure
+4. Run linting before committing
+5. Submit a pull request
 
 ## Support
 
-For issues and questions:
-1. Check [SUDO_SETUP.md](SUDO_SETUP.md) for sudo-related issues
-2. Check [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common problems (if exists)
-3. Review application logs: `sudo journalctl -u claude-monitor -f`
-4. Open a GitHub issue with details
+- **Documentation**: See docs in this repository
+- **Issues**: Report on GitHub Issues
+- **Troubleshooting**: See TROUBLESHOOTING.md
 
-## Acknowledgments
+## Credits
 
-Built for monitoring Claude Code sessions over Tailscale network with multi-user support.
+Built for monitoring Claude Code sessions over Tailscale networks.
+
+## Version
+
+Current version: 0.1.0
+
+See CHANGELOG.md for version history.
