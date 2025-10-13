@@ -981,74 +981,77 @@ function setupEventListeners() {
 
 // ===== Initialization =====
 
-// Initialize terminal on page load
-initTerminal();
+// Wait for DOM to be ready before initializing
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize terminal on page load
+    initTerminal();
 
-// Initialize Monaco Editor
-initMonacoEditor();
+    // Initialize Monaco Editor
+    initMonacoEditor();
 
-// Initialize Socket.io
-initSocket();
+    // Initialize Socket.io
+    initSocket();
 
-// Setup event listeners
-setupEventListeners();
+    // Setup event listeners
+    setupEventListeners();
 
-// ===== iOS-Specific Paste Support =====
+    // ===== iOS-Specific Paste Support =====
 
-// iOS Safari specific paste handling
-// iOS requires input element to receive paste
-const pasteInput = document.createElement('textarea');
-pasteInput.style.position = 'absolute';
-pasteInput.style.left = '-9999px';
-pasteInput.style.opacity = '0';
-pasteInput.setAttribute('aria-hidden', 'true');
-document.body.appendChild(pasteInput);
+    // iOS Safari specific paste handling
+    // iOS requires input element to receive paste
+    const pasteInput = document.createElement('textarea');
+    pasteInput.style.position = 'absolute';
+    pasteInput.style.left = '-9999px';
+    pasteInput.style.opacity = '0';
+    pasteInput.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(pasteInput);
 
-// Focus paste input when needed (e.g., on button click)
-document.getElementById('paste-trigger')?.addEventListener('click', () => {
-    pasteInput.focus();
-});
+    // Focus paste input when needed (e.g., on button click)
+    document.getElementById('paste-trigger')?.addEventListener('click', () => {
+        pasteInput.focus();
+    });
 
-// Handle paste in hidden input
-pasteInput.addEventListener('paste', async (e) => {
-    if (!currentSessionId) return;
+    // Handle paste in hidden input
+    pasteInput.addEventListener('paste', async (e) => {
+        if (!currentSessionId) return;
 
-    const items = e.clipboardData.items;
-    const files = [];
+        const items = e.clipboardData.items;
+        const files = [];
 
-    for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.kind === 'file') {
-            const file = item.getAsFile();
-            if (file) {
-                files.push(file);
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) {
+                    files.push(file);
+                }
             }
         }
-    }
 
-    if (files.length > 0) {
+        if (files.length > 0) {
+            e.preventDefault();
+            uploadFiles(files);
+            // Return focus to terminal
+            terminal.focus();
+        }
+    });
+
+    // ===== Mobile-Specific Enhancements =====
+
+    // Prevent zoom on double-tap for better mobile UX
+    document.addEventListener('dblclick', (e) => {
         e.preventDefault();
-        uploadFiles(files);
-        // Return focus to terminal
-        terminal.focus();
-    }
-});
+    }, { passive: false });
 
-// ===== Mobile-Specific Enhancements =====
-
-// Prevent zoom on double-tap for better mobile UX
-document.addEventListener('dblclick', (e) => {
-    e.preventDefault();
-}, { passive: false });
-
-// Add touch feedback for buttons
-document.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('touchstart', () => {
-        btn.style.opacity = '0.7';
+    // Add touch feedback for buttons
+    document.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('touchstart', () => {
+            btn.style.opacity = '0.7';
+        });
+        btn.addEventListener('touchend', () => {
+            btn.style.opacity = '1';
+        });
     });
-    btn.addEventListener('touchend', () => {
-        btn.style.opacity = '1';
-    });
-});
 
-console.log('Claude Code Monitor - Frontend initialized');
+    console.log('Claude Code Monitor - Frontend initialized');
+});
