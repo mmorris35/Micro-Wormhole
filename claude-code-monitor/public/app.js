@@ -279,6 +279,7 @@ function attachToSession(sessionId) {
         stopBtn.disabled = session.status !== 'running';
         deleteBtn.disabled = false;
         uploadBtn.removeAttribute('disabled');
+        document.getElementById('paste-trigger')?.removeAttribute('disabled');
 
         renderSessions();
         socket.emit('session:attach', { sessionId });
@@ -302,6 +303,7 @@ function detachSession() {
     stopBtn.disabled = true;
     deleteBtn.disabled = true;
     uploadBtn.setAttribute('disabled', 'disabled');
+    document.getElementById('paste-trigger')?.setAttribute('disabled', 'disabled');
 
     renderSessions();
 }
@@ -548,6 +550,31 @@ function setupEventListeners() {
             uploadFiles(Array.from(e.dataTransfer.files));
         }
     });
+
+    // Paste handler for iOS and desktop
+    document.addEventListener('paste', async (e) => {
+        if (!currentSessionId) return;
+
+        const items = e.clipboardData.items;
+        const files = [];
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+
+            // Handle files
+            if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) {
+                    files.push(file);
+                }
+            }
+        }
+
+        if (files.length > 0) {
+            e.preventDefault();
+            uploadFiles(files);
+        }
+    });
 }
 
 // ===== Initialization =====
@@ -560,6 +587,47 @@ initSocket();
 
 // Setup event listeners
 setupEventListeners();
+
+// ===== iOS-Specific Paste Support =====
+
+// iOS Safari specific paste handling
+// iOS requires input element to receive paste
+const pasteInput = document.createElement('textarea');
+pasteInput.style.position = 'absolute';
+pasteInput.style.left = '-9999px';
+pasteInput.style.opacity = '0';
+pasteInput.setAttribute('aria-hidden', 'true');
+document.body.appendChild(pasteInput);
+
+// Focus paste input when needed (e.g., on button click)
+document.getElementById('paste-trigger')?.addEventListener('click', () => {
+    pasteInput.focus();
+});
+
+// Handle paste in hidden input
+pasteInput.addEventListener('paste', async (e) => {
+    if (!currentSessionId) return;
+
+    const items = e.clipboardData.items;
+    const files = [];
+
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+            const file = item.getAsFile();
+            if (file) {
+                files.push(file);
+            }
+        }
+    }
+
+    if (files.length > 0) {
+        e.preventDefault();
+        uploadFiles(files);
+        // Return focus to terminal
+        terminal.focus();
+    }
+});
 
 // ===== Mobile-Specific Enhancements =====
 
