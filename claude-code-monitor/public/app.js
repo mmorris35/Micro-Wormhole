@@ -349,29 +349,35 @@ async function uploadFiles(files) {
     // Show progress
     uploadProgress.classList.remove('hidden');
     uploadProgressFill.style.width = '0%';
-    uploadProgressText.textContent = `Uploading ${files.length} file(s)...`;
 
     let completed = 0;
+    const total = files.length;
 
     for (const file of files) {
+        uploadProgressText.textContent = `Uploading ${file.name} (${completed + 1}/${total})...`;
+
         try {
             await uploadFile(file);
             completed++;
 
             // Update progress
-            const percent = Math.round((completed / files.length) * 100);
+            const percent = Math.round((completed / total) * 100);
             uploadProgressFill.style.width = percent + '%';
-            uploadProgressText.textContent = `Uploaded ${completed}/${files.length} files`;
 
         } catch (error) {
             console.error('Upload failed:', error);
-            alert(`Failed to upload ${file.name}: ${error.message}`);
+            uploadProgressText.textContent = `Failed: ${file.name}`;
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
+
+    // Show completion
+    uploadProgressText.textContent = `Uploaded ${completed}/${total} file(s) successfully`;
 
     // Hide progress after delay
     setTimeout(() => {
         uploadProgress.classList.add('hidden');
+        uploadProgressFill.style.width = '0%';
     }, 2000);
 }
 
