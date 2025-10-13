@@ -19,25 +19,40 @@ class PTYManager extends EventEmitter {
 
     /**
      * Spawn a new PTY process for a session
-     * Note: Phase 6 will add sudo support for running as different users
+     * Uses sudo to run as specified user
      */
-    // eslint-disable-next-line no-unused-vars
-    spawn(sessionId, command, workingDirectory, runAsUser = null) {
+    spawn(sessionId, command, workingDirectory, runAsUser) {
         if (this.processes.has(sessionId)) {
             throw new Error(`Session ${sessionId} already has an active process`);
         }
 
         try {
-            // For Phase 3, we'll spawn directly without sudo
-            // Phase 6 will add: ['sudo', '-u', runAsUser, 'bash', '-l']
-            const shell = process.env.SHELL || 'bash';
-            const ptyProcess = pty.spawn(shell, ['-l'], {
-                name: 'xterm-color',
-                cols: PTY_COLS,
-                rows: PTY_ROWS,
-                cwd: workingDirectory,
-                env: process.env
-            });
+            let ptyProcess;
+
+            if (runAsUser && runAsUser !== process.env.USER) {
+                // Spawn bash as different user using sudo
+                logger.info(`Spawning PTY as user ${runAsUser} for session ${sessionId}`);
+
+                ptyProcess = pty.spawn('sudo', ['-u', runAsUser, 'bash', '-l'], {
+                    name: 'xterm-color',
+                    cols: PTY_COLS,
+                    rows: PTY_ROWS,
+                    cwd: workingDirectory,
+                    env: process.env
+                });
+            } else {
+                // Spawn bash as current user (no sudo)
+                logger.info(`Spawning PTY as current user for session ${sessionId}`);
+                const shell = process.env.SHELL || 'bash';
+
+                ptyProcess = pty.spawn(shell, ['-l'], {
+                    name: 'xterm-color',
+                    cols: PTY_COLS,
+                    rows: PTY_ROWS,
+                    cwd: workingDirectory,
+                    env: process.env
+                });
+            }
 
             logger.info(`PTY spawned for session ${sessionId}: PID ${ptyProcess.pid}`);
 

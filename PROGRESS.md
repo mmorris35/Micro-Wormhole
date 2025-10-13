@@ -24,12 +24,12 @@
 ## Current Status: Phase 6 In Progress 🚧
 
 **Active Phase**: Phase 6 - Multi-User Support & Security
-**Current Task**: 6.2 - Add user selection to UI
-**Completed Tasks**: 2/6 in Phase 6
+**Current Task**: 6.3 - Implement sudo-based process spawning
+**Completed Tasks**: 3/6 in Phase 6
 
-**Recent Completion**: Task 6.2 user selection UI complete
+**Recent Completion**: Task 6.3 sudo-based process spawning complete
 
-**Next Action**: Complete task 6.3 sudo-based process spawning
+**Next Action**: Complete task 6.4 sudo configuration guide
 
 ---
 
@@ -178,36 +178,7 @@
 ### Tasks:
 - [x] 6.1 Implement user enumeration - Completed 2025-10-12 19:35
 - [x] 6.2 Add user selection to UI - Completed 2025-10-12 19:50
-- [ ] 6.3 Implement sudo-based process spawning
-- [ ] 6.4 Create sudo configuration guide
-- [ ] 6.5 Update file copy with sudo
-- [ ] 6.6 Test multi-user functionality
-
-### Completion Criteria:
-- [ ] System users enumerated correctly (only /home/* users)
-- [ ] User dropdown populated in new session modal
-- [ ] PTY processes spawn as specified user via sudo
-- [ ] File uploads copied with correct user ownership
-- [ ] User validation prevents invalid users
-- [ ] Sudo configuration documented in SUDO_SETUP.md
-- [ ] Security checks implemented
-- [ ] Multi-user tested with multiple actual users
-- [ ] All task branches merged to phase-6-multi-user
-- [ ] Phase branch ready to merge to main
-
----
-
-## Phase 7: Testing & Deployment ⏳
-
-**Status**: Not Started
-**Branch**: `phase-6-multi-user`
-**Started**: -
-**Completed**: -
-
-### Tasks:
-- [ ] 6.1 Implement user enumeration
-- [ ] 6.2 Add user selection to UI
-- [ ] 6.3 Implement sudo-based process spawning
+- [x] 6.3 Implement sudo-based process spawning - Completed 2025-10-12 20:15
 - [ ] 6.4 Create sudo configuration guide
 - [ ] 6.5 Update file copy with sudo
 - [ ] 6.6 Test multi-user functionality

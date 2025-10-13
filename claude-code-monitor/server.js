@@ -55,6 +55,29 @@ io.on('connection', (socket) => {
     socket.on('session:create', async (data) => {
         try {
             const { name, command, workingDirectory, runAsUser } = data;
+
+            // Validation
+            if (!name || !command || !workingDirectory || !runAsUser) {
+                return socket.emit('error', { message: 'All fields are required' });
+            }
+
+            // Validate user exists
+            if (!usersUtil.validateUser(runAsUser)) {
+                return socket.emit('error', { message: `User '${runAsUser}' does not exist on this system` });
+            }
+
+            // Validate working directory exists
+            if (!fs.existsSync(workingDirectory)) {
+                return socket.emit('error', { message: `Directory '${workingDirectory}' does not exist` });
+            }
+
+            // Check max sessions limit
+            const MAX_SESSIONS = parseInt(process.env.MAX_SESSIONS) || 10;
+            const runningSessions = sessionsDb.getSessionsByStatus('running');
+            if (runningSessions.length >= MAX_SESSIONS) {
+                return socket.emit('error', { message: `Maximum number of sessions (${MAX_SESSIONS}) reached` });
+            }
+
             const session = await sessionManager.createSession({
                 name,
                 command,
