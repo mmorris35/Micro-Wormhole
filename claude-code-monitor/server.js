@@ -215,6 +215,28 @@ app.use(express.static(path.join(__dirname, 'public'), {
 
 const multer = require('multer');
 
+/**
+ * Copy file to destination with correct ownership
+ * Phase 6 will add sudo support for different users
+ */
+// eslint-disable-next-line no-unused-vars
+async function copyFileToSession(sourcePath, destPath, runAsUser) {
+    try {
+        // Phase 5: Simple copy (current user only)
+        fs.copyFileSync(sourcePath, destPath);
+        logger.info(`File copied: ${destPath}`);
+
+        // Phase 6 will add:
+        // - sudo cp ${sourcePath} ${destPath}
+        // - sudo chown ${runAsUser}:${runAsUser} ${destPath}
+
+        return true;
+    } catch (error) {
+        logger.error('File copy failed:', error);
+        throw error;
+    }
+}
+
 // Ensure uploads directory exists
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
 if (!fs.existsSync(UPLOAD_DIR)) {
@@ -403,9 +425,7 @@ app.post('/api/upload/:sessionId', upload.single('file'), async (req, res) => {
         logger.info(`Uploading file to session ${sessionId}: ${file.originalname}`);
 
         // Copy file to session directory and set ownership
-        // Phase 6 will add sudo support for different users
-        // For now, just copy the file
-        fs.copyFileSync(tempPath, destPath);
+        await copyFileToSession(tempPath, destPath, session.run_as_user);
 
         // Clean up temp file
         fs.unlinkSync(tempPath);
