@@ -7,6 +7,8 @@
     <link rel="stylesheet" href="style.css">
     <!-- xterm.js CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <!-- Monaco Editor -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
 </head>
 <body>
     <!-- Main Container -->
@@ -106,6 +108,44 @@
         </div>
         <div id="upload-progress-text" class="upload-progress-text">Uploading...</div>
     </div>
+
+    <!-- File Editor Panel -->
+    <div id="editor-panel" class="editor-panel collapsed">
+        <div class="editor-header">
+            <div class="editor-title">
+                <span class="editor-icon">📄</span>
+                <span id="editor-filename">No file selected</span>
+            </div>
+            <div class="editor-actions">
+                <button id="editor-refresh" class="btn-icon" title="Refresh file">
+                    <span>🔄</span>
+                </button>
+                <button id="editor-close" class="btn-icon" title="Close editor">
+                    <span>×</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- File Browser -->
+        <div id="file-browser" class="file-browser">
+            <div class="file-browser-header">
+                <span class="file-browser-title">📁 Files</span>
+                <button id="file-browser-refresh" class="btn-icon" title="Refresh files">
+                    <span>🔄</span>
+                </button>
+            </div>
+            <div id="file-list" class="file-list">
+                <div class="file-list-empty">No session selected</div>
+            </div>
+        </div>
+
+        <div id="monaco-container"></div>
+    </div>
+
+    <!-- Editor Toggle Button -->
+    <button id="editor-toggle" class="editor-toggle" title="Toggle file editor">
+        <span class="toggle-icon">📝</span>
+    </button>
 
     <!-- CDN Scripts -->
     <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>

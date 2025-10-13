@@ -1,6 +1,6 @@
 'use strict';
 
-/* global Terminal, FitAddon, io */
+/* global Terminal, FitAddon, io, monaco */
 
 // ===== State Variables =====
 let socket = null;
@@ -8,6 +8,13 @@ let terminal = null;
 let fitAddon = null;
 let currentSessionId = null;
 let sessions = [];
+
+// Monaco Editor
+let monacoEditor = null;
+let currentEditorFile = null;
+
+// Track recently modified files
+let modifiedFiles = new Set();
 
 // ===== DOM Elements =====
 const sessionList = document.getElementById('session-list');
@@ -104,6 +111,195 @@ function renderSessions() {
 
         sessionList.appendChild(item);
     });
+}
+
+// ===== Monaco Editor Integration =====
+
+/**
+ * Initialize Monaco Editor
+ */
+function initMonacoEditor() {
+    require.config({
+        paths: {
+            vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs'
+        }
+    });
+
+    require(['vs/editor/editor.main'], function() {
+        monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: '// Select a file to view',
+            language: 'javascript',
+            theme: 'vs-dark',
+            readOnly: true,
+            automaticLayout: true,
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            fontSize: 13,
+            lineNumbers: 'on',
+            renderWhitespace: 'selection',
+            folding: true
+        });
+
+        console.log('Monaco Editor initialized');
+    });
+}
+
+/**
+ * Detect language from file extension
+ */
+function detectLanguage(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const languageMap = {
+        'js': 'javascript',
+        'ts': 'typescript',
+        'jsx': 'javascript',
+        'tsx': 'typescript',
+        'json': 'json',
+        'html': 'html',
+        'css': 'css',
+        'scss': 'scss',
+        'md': 'markdown',
+        'py': 'python',
+        'java': 'java',
+        'cpp': 'cpp',
+        'c': 'c',
+        'go': 'go',
+        'rs': 'rust',
+        'sh': 'shell',
+        'bash': 'shell',
+        'yml': 'yaml',
+        'yaml': 'yaml',
+        'xml': 'xml',
+        'sql': 'sql',
+        'rb': 'ruby',
+        'php': 'php',
+        'swift': 'swift',
+        'kt': 'kotlin',
+        'r': 'r',
+        'txt': 'plaintext'
+    };
+
+    return languageMap[ext] || 'plaintext';
+}
+
+/**
+ * Open file in editor
+ */
+function openFileInEditor(sessionId, filePath) {
+    if (!monacoEditor) {
+        alert('Editor not ready');
+        return;
+    }
+
+    socket.emit('file:read', { sessionId, filePath });
+}
+
+/**
+ * Show editor panel
+ */
+function showEditorPanel() {
+    const panel = document.getElementById('editor-panel');
+    const toggle = document.getElementById('editor-toggle');
+    const container = document.querySelector('.container');
+
+    panel.classList.remove('collapsed');
+    toggle.classList.add('active');
+    container.classList.add('editor-open');
+}
+
+/**
+ * Hide editor panel
+ */
+function hideEditorPanel() {
+    const panel = document.getElementById('editor-panel');
+    const toggle = document.getElementById('editor-toggle');
+    const container = document.querySelector('.container');
+
+    panel.classList.add('collapsed');
+    toggle.classList.remove('active');
+    container.classList.remove('editor-open');
+
+    currentEditorFile = null;
+}
+
+/**
+ * Refresh current file in editor
+ */
+function refreshEditorFile() {
+    if (currentEditorFile && currentSessionId) {
+        openFileInEditor(currentSessionId, currentEditorFile);
+    }
+}
+
+/**
+ * Request file list for session
+ */
+function requestFileList(sessionId, path = '.') {
+    socket.emit('file:list', { sessionId, path });
+}
+
+/**
+ * Render file list
+ */
+function renderFileList(files) {
+    const fileListDiv = document.getElementById('file-list');
+
+    if (!files || files.length === 0) {
+        fileListDiv.innerHTML = '<div class="file-list-empty">No files found</div>';
+        return;
+    }
+
+    fileListDiv.innerHTML = '';
+
+    files.forEach(file => {
+        const item = document.createElement('div');
+        item.className = 'file-item';
+
+        if (file.type === 'directory') {
+            item.classList.add('directory');
+        }
+
+        // Add modified class if file was recently changed
+        if (modifiedFiles.has(file.path)) {
+            item.classList.add('modified');
+        }
+
+        const icon = file.type === 'directory' ? '📁' : '📄';
+        const sizeStr = file.type === 'file' ? formatFileSize(file.size) : '';
+
+        item.innerHTML = `
+            <span class="file-icon">${icon}</span>
+            <span class="file-name">${escapeHtml(file.name)}</span>
+            ${sizeStr ? `<span class="file-size">${sizeStr}</span>` : ''}
+        `;
+
+        // Click handler
+        if (file.type === 'file') {
+            item.addEventListener('click', () => {
+                // Remove active from all
+                document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
+                item.classList.add('active');
+
+                openFileInEditor(currentSessionId, file.path);
+            });
+        } else {
+            // Directory - could expand to show subdirectories in future
+            item.addEventListener('click', () => {
+                requestFileList(currentSessionId, file.path);
+            });
+        }
+
+        fileListDiv.appendChild(item);
+    });
+}
+
+/**
+ * Format file size
+ */
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
 // ===== Terminal Integration =====
@@ -332,6 +528,9 @@ function attachToSession(sessionId) {
 
         renderSessions();
         socket.emit('session:attach', { sessionId });
+
+        // Request file list for editor
+        requestFileList(sessionId);
     }
 }
 
@@ -567,6 +766,79 @@ function initSocket() {
         }
     });
 
+    // File list received
+    socket.on('file:list', ({ sessionId, files }) => {
+        if (sessionId === currentSessionId) {
+            renderFileList(files);
+        }
+    });
+
+    // File contents received
+    socket.on('file:contents', ({ sessionId, path, content }) => {
+        if (!monacoEditor) {
+            console.error('Monaco editor not initialized');
+            return;
+        }
+
+        const language = detectLanguage(path);
+        const model = monacoEditor.getModel();
+
+        monaco.editor.setModelLanguage(model, language);
+        monacoEditor.setValue(content);
+
+        currentEditorFile = path;
+        document.getElementById('editor-filename').textContent = path;
+
+        showEditorPanel();
+
+        // Start watching for changes
+        socket.emit('file:watch:start', { sessionId });
+    });
+
+    // File changed notification
+    socket.on('file:changed', ({ sessionId, filename, eventType }) => {
+        console.log(`File changed: ${filename} (${eventType})`);
+
+        // Mark file as modified
+        modifiedFiles.add(filename);
+
+        // Remove from set after 5 seconds
+        setTimeout(() => {
+            modifiedFiles.delete(filename);
+            if (sessionId === currentSessionId) {
+                requestFileList(sessionId);
+            }
+        }, 5000);
+
+        // If the changed file is currently open, auto-reload
+        if (filename === currentEditorFile) {
+            console.log('Current file changed, reloading...');
+
+            // Show notification in editor
+            const editorFilename = document.getElementById('editor-filename');
+            editorFilename.textContent = `${filename} (reloading...)`;
+
+            setTimeout(() => {
+                refreshEditorFile();
+            }, 500);
+        }
+
+        // Refresh file list
+        if (sessionId === currentSessionId) {
+            requestFileList(sessionId);
+        }
+    });
+
+    // File watch started
+    socket.on('file:watch:started', ({ sessionId }) => {
+        console.log(`File watching started for session ${sessionId}`);
+    });
+
+    // File watch stopped
+    socket.on('file:watch:stopped', ({ sessionId }) => {
+        console.log(`File watching stopped for session ${sessionId}`);
+    });
+
     // Error event
     socket.on('error', (data) => {
         console.error('Socket.io error:', data.message);
@@ -669,12 +941,51 @@ function setupEventListeners() {
             uploadFiles(files);
         }
     });
+
+    // Editor toggle button
+    document.getElementById('editor-toggle').addEventListener('click', () => {
+        const panel = document.getElementById('editor-panel');
+        if (panel.classList.contains('collapsed')) {
+            // Request file list when opening editor
+            if (currentSessionId) {
+                // For now, just show the panel - file browser in next task
+                showEditorPanel();
+            } else {
+                alert('No active session. Attach to a session first.');
+            }
+        } else {
+            hideEditorPanel();
+        }
+    });
+
+    // Editor close button
+    document.getElementById('editor-close').addEventListener('click', () => {
+        hideEditorPanel();
+        if (currentSessionId) {
+            socket.emit('file:watch:stop', { sessionId: currentSessionId });
+        }
+    });
+
+    // Editor refresh button
+    document.getElementById('editor-refresh').addEventListener('click', () => {
+        refreshEditorFile();
+    });
+
+    // File browser refresh
+    document.getElementById('file-browser-refresh').addEventListener('click', () => {
+        if (currentSessionId) {
+            requestFileList(currentSessionId);
+        }
+    });
 }
 
 // ===== Initialization =====
 
 // Initialize terminal on page load
 initTerminal();
+
+// Initialize Monaco Editor
+initMonacoEditor();
 
 // Initialize Socket.io
 initSocket();

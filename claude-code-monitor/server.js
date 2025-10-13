@@ -16,6 +16,7 @@ const sessionsDb = require('./lib/sessions-db');
 const ptyManager = require('./lib/pty-manager');
 const sessionManager = require('./lib/session-manager');
 const usersUtil = require('./lib/users');
+const fileManager = require('./lib/file-manager');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -190,6 +191,63 @@ io.on('connection', (socket) => {
             logger.error('Error resizing terminal:', error);
             socket.emit('error', { message: error.message });
         }
+    });
+
+    // List files in session directory
+    socket.on('file:list', async ({ sessionId, path = '.' }) => {
+        try {
+            const session = sessionsDb.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            const files = await fileManager.listFiles(session.working_directory, path);
+            socket.emit('file:list', { sessionId, path, files });
+        } catch (error) {
+            logger.error('File list failed:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    // Read file contents
+    socket.on('file:read', async ({ sessionId, filePath }) => {
+        try {
+            const session = sessionsDb.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            const fileData = await fileManager.readFile(session.working_directory, filePath);
+            socket.emit('file:contents', {
+                sessionId,
+                ...fileData
+            });
+        } catch (error) {
+            logger.error('File read failed:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    // Start watching directory
+    socket.on('file:watch:start', ({ sessionId }) => {
+        try {
+            const session = sessionsDb.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            fileManager.watchDirectory(sessionId, session.working_directory, io);
+            socket.emit('file:watch:started', { sessionId });
+        } catch (error) {
+            logger.error('Failed to start file watch:', error);
+            socket.emit('error', { message: error.message });
+        }
+    });
+
+    // Stop watching directory
+    socket.on('file:watch:stop', ({ sessionId }) => {
+        fileManager.stopWatching(sessionId);
+        socket.emit('file:watch:stopped', { sessionId });
     });
 
     socket.on('disconnect', (reason) => {
@@ -577,6 +635,9 @@ function gracefulShutdown(signal) {
 
             // Kill all PTY processes
             ptyManager.killAll();
+
+            // Stop all file watchers
+            fileManager.stopAllWatchers();
 
             logger.info('Graceful shutdown complete');
             process.exit(0);
