@@ -11,6 +11,7 @@ const { db, closeDatabase } = require('./lib/database');
 const sessionsDb = require('./lib/sessions-db');
 const ptyManager = require('./lib/pty-manager');
 const sessionManager = require('./lib/session-manager');
+const usersUtil = require('./lib/users');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -37,6 +38,18 @@ io.on('connection', (socket) => {
 
     // Send welcome message
     socket.emit('message', { text: 'Connected to Claude Code Monitor' });
+
+    // Get available users
+    socket.on('users:list', () => {
+        try {
+            const users = usersUtil.getSystemUsers();
+            const usernames = users.map(u => u.username);
+            socket.emit('users:list', { users: usernames });
+        } catch (error) {
+            logger.error('Failed to get users list:', error);
+            socket.emit('error', { message: 'Failed to get users list' });
+        }
+    });
 
     // Session lifecycle events
     socket.on('session:create', async (data) => {
