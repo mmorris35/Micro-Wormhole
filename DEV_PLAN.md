@@ -217,6 +217,52 @@ Before merging phase branch to `main`:
 
 ---
 
+### [Phase 9: Claude Code Session Discovery & Viewing](dev-plan/phase-9.md)
+**Branch**: `phase-9-claude-sessions`
+**Duration**: ~8 hours
+**Completion Criteria**:
+- Backend scans ~/.claude/projects/ for all users
+- Session metadata extracted (repo, session ID, status, last activity)
+- JSONL parser reads conversation history
+- UI displays Claude Code sessions separate from PTY sessions
+- Clicking a Claude session shows conversation history
+- Active sessions update in real-time
+- File edits from conversation viewable in Monaco Editor
+
+**Tasks**:
+- 9.1 Create Claude Code session scanner backend
+- 9.2 Create JSONL parser for conversation history
+- 9.3 Update UI to display Claude Code sessions
+- 9.4 Integrate file viewing from conversation
+- 9.5 Documentation and testing
+
+**Note**: This phase enables viewing existing Claude Code sessions (like THIS session) in the browser, grouped by repository.
+
+---
+
+### [Phase 10: Inject Prompts into Claude Code Sessions](dev-plan/phase-10.md)
+**Branch**: `phase-10-session-injection`
+**Duration**: ~6 hours
+**Completion Criteria**:
+- Claude Code CLI interaction method identified
+- Prompt injection backend implemented
+- Input box added to conversation viewer
+- Messages sent successfully to active sessions
+- Responses appear in real-time
+- File attachment support
+- Permission validation (only session owner can inject)
+
+**Tasks**:
+- 10.1 Research Claude Code CLI interaction
+- 10.2 Implement prompt injection backend
+- 10.3 Add input UI for message injection
+- 10.4 Handle Claude responses and real-time updates
+- 10.5 Documentation and testing
+
+**Note**: This phase enables interactive communication with Claude Code sessions from the browser, not just viewing them.
+
+---
+
 ## How to Use This Plan
 
 ### Starting a Phase
@@ -349,9 +395,13 @@ Create a `PROGRESS.md` file to track completion:
 | Phase 6 | 6 hours | 31 hours |
 | Phase 7 | 6 hours | 37 hours |
 | Phase 8 | 6 hours | 43 hours |
+| Phase 9 | 8 hours | 51 hours |
+| Phase 10 | 6 hours | 57 hours |
 
 **Core application (Phases 1-7)**: 37 hours (~5 working days)
 **With file editor (Phases 1-8)**: 43 hours (~5.5 working days)
+**With Claude session viewing (Phases 1-9)**: 51 hours (~6.5 working days)
+**Full interactive system (Phases 1-10)**: 57 hours (~7 working days)
 
 ## Support
 
