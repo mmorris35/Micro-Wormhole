@@ -7,8 +7,6 @@
     <link rel="stylesheet" href="style.css">
     <!-- xterm.js CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
-    <!-- Monaco Editor -->
-    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
 </head>
 <body>
     <!-- Main Container -->
@@ -147,12 +145,15 @@
         <span class="toggle-icon">📝</span>
     </button>
 
-    <!-- CDN Scripts -->
+    <!-- CDN Scripts - Load in specific order to avoid AMD conflicts -->
     <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
 
+    <!-- Monaco Editor - Load AFTER xterm to avoid AMD loader conflicts -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+
     <!-- Application Script -->
-    <script src="app.js"></script>
+    <script src="app.js?v=20251013-2"></script>
 </body>
 </html>
