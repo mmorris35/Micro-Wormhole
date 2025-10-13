@@ -5,7 +5,11 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const { exec } = require('child_process');
+const util = require('util');
 require('dotenv').config();
+
+const execPromise = util.promisify(exec);
 const logger = require('./lib/logger');
 const { db, closeDatabase } = require('./lib/database');
 const sessionsDb = require('./lib/sessions-db');
@@ -252,24 +256,35 @@ app.use(express.static(path.join(__dirname, 'public'), {
 const multer = require('multer');
 
 /**
- * Copy file to destination with correct ownership
- * Phase 6 will add sudo support for different users
+ * Copy file to destination with correct ownership using sudo
  */
-// eslint-disable-next-line no-unused-vars
 async function copyFileToSession(sourcePath, destPath, runAsUser) {
     try {
-        // Phase 5: Simple copy (current user only)
-        fs.copyFileSync(sourcePath, destPath);
-        logger.info(`File copied: ${destPath}`);
+        // Determine if we need sudo
+        const currentUser = process.env.USER || process.env.USERNAME;
+        const needsSudo = runAsUser && runAsUser !== currentUser;
 
-        // Phase 6 will add:
-        // - sudo cp ${sourcePath} ${destPath}
-        // - sudo chown ${runAsUser}:${runAsUser} ${destPath}
+        if (needsSudo) {
+            // Use sudo to copy and set ownership
+            logger.info(`Copying file as user ${runAsUser}: ${destPath}`);
+
+            // Copy file
+            await execPromise(`sudo -u ${runAsUser} cp "${sourcePath}" "${destPath}"`);
+
+            // Set ownership
+            await execPromise(`sudo -u ${runAsUser} chown ${runAsUser}:${runAsUser} "${destPath}"`);
+
+            logger.info(`File copied with correct ownership: ${destPath}`);
+        } else {
+            // Simple copy (no sudo needed)
+            fs.copyFileSync(sourcePath, destPath);
+            logger.info(`File copied: ${destPath}`);
+        }
 
         return true;
     } catch (error) {
         logger.error('File copy failed:', error);
-        throw error;
+        throw new Error(`Failed to copy file: ${error.message}`);
     }
 }
 
