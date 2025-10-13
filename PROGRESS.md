@@ -24,12 +24,12 @@
 ## Current Status: Phase 6 In Progress 🚧
 
 **Active Phase**: Phase 6 - Multi-User Support & Security
-**Current Task**: 6.1 - Implement user enumeration
-**Completed Tasks**: 1/6 in Phase 6
+**Current Task**: 6.2 - Add user selection to UI
+**Completed Tasks**: 2/6 in Phase 6
 
-**Recent Completion**: Task 6.1 user enumeration complete
+**Recent Completion**: Task 6.2 user selection UI complete
 
-**Next Action**: Complete task 6.2 user selection UI
+**Next Action**: Complete task 6.3 sudo-based process spawning
 
 ---
 
@@ -177,7 +177,7 @@
 
 ### Tasks:
 - [x] 6.1 Implement user enumeration - Completed 2025-10-12 19:35
-- [ ] 6.2 Add user selection to UI
+- [x] 6.2 Add user selection to UI - Completed 2025-10-12 19:50
 - [ ] 6.3 Implement sudo-based process spawning
 - [ ] 6.4 Create sudo configuration guide
 - [ ] 6.5 Update file copy with sudo

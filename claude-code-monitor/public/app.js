@@ -178,6 +178,7 @@ function initTerminal() {
 function openNewSessionModal() {
     setDefaultSessionName();
     setDefaultWorkingDir();
+    loadAvailableUsers();  // Refresh users list
     modalOverlay.classList.remove('hidden');
     sessionNameInput.focus();
 }
@@ -208,6 +209,54 @@ function setDefaultSessionName() {
  */
 function setDefaultWorkingDir() {
     workingDirInput.value = '/tmp';
+}
+
+/**
+ * Populates the user select dropdown with available system users
+ */
+function populateUserSelect(users) {
+    runAsUserSelect.innerHTML = '<option value="">Select user...</option>';
+
+    if (users.length === 0) {
+        runAsUserSelect.innerHTML = '<option value="">No users available</option>';
+        runAsUserSelect.disabled = true;
+        return;
+    }
+
+    runAsUserSelect.disabled = false;
+
+    users.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user;
+        option.textContent = user;
+        runAsUserSelect.appendChild(option);
+    });
+
+    // Select first user by default if available
+    if (users.length > 0) {
+        runAsUserSelect.value = users[0];
+        updateWorkingDirForUser(users[0]);
+    }
+}
+
+/**
+ * Updates working directory based on selected user
+ */
+function updateWorkingDirForUser(username) {
+    if (!username) {
+        workingDirInput.value = '/tmp';
+        return;
+    }
+
+    // Set to user's home directory
+    workingDirInput.value = `/home/${username}`;
+}
+
+/**
+ * Loads available users from server
+ */
+function loadAvailableUsers() {
+    socket.emit('users:list');
 }
 
 /**
@@ -442,10 +491,17 @@ function initSocket() {
     socket.on('connect', () => {
         console.log('Connected to server');
         loadSessions();
+        loadAvailableUsers();
     });
 
     socket.on('disconnect', () => {
         console.log('Disconnected from server');
+    });
+
+    // Users list event
+    socket.on('users:list', (data) => {
+        const users = data.users || [];
+        populateUserSelect(users);
     });
 
     // Session list event
@@ -542,6 +598,11 @@ function setupEventListeners() {
     newSessionForm.addEventListener('submit', (e) => {
         e.preventDefault();
         createSession();
+    });
+
+    // User selection change
+    runAsUserSelect.addEventListener('change', (e) => {
+        updateWorkingDirForUser(e.target.value);
     });
 
     // Session action buttons
