@@ -405,8 +405,14 @@ app.post('/api/upload/:sessionId', upload.single('file'), async (req, res) => {
     const { sessionId } = req.params;
     const file = req.file;
 
+    // Validation
     if (!file) {
         return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    if (!sessionId) {
+        fs.unlinkSync(file.path);
+        return res.status(400).json({ error: 'Session ID required' });
     }
 
     try {
@@ -416,6 +422,18 @@ app.post('/api/upload/:sessionId', upload.single('file'), async (req, res) => {
             // Clean up uploaded file
             fs.unlinkSync(file.path);
             return res.status(404).json({ error: 'Session not found' });
+        }
+
+        // Validate session is running
+        if (session.status !== 'running') {
+            fs.unlinkSync(file.path);
+            return res.status(400).json({ error: 'Session is not running' });
+        }
+
+        // Validate working directory exists
+        if (!fs.existsSync(session.working_directory)) {
+            fs.unlinkSync(file.path);
+            return res.status(400).json({ error: 'Session working directory not found' });
         }
 
         // Destination path in session working directory

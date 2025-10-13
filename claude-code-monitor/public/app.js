@@ -338,11 +338,27 @@ function deleteSession() {
  */
 async function uploadFiles(files) {
     if (!currentSessionId) {
-        alert('No active session');
+        alert('No active session selected');
         return;
     }
 
     if (files.length === 0) {
+        return;
+    }
+
+    // Validate file sizes
+    const maxSize = 104857600; // 100MB
+    const oversized = files.filter(f => f.size > maxSize);
+
+    if (oversized.length > 0) {
+        alert(`The following files exceed 100MB limit:\n${oversized.map(f => f.name).join('\n')}`);
+        return;
+    }
+
+    // Validate total upload size
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > maxSize * 5) { // Max 500MB total
+        alert('Total upload size exceeds limit (500MB)');
         return;
     }
 
@@ -390,14 +406,25 @@ async function uploadFile(file) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`/api/upload/${currentSessionId}`, {
-        method: 'POST',
-        body: formData
-    });
+    let response;
+    try {
+        response = await fetch(`/api/upload/${currentSessionId}`, {
+            method: 'POST',
+            body: formData
+        });
+    } catch (error) {
+        throw new Error(`Network error: ${error.message}`);
+    }
 
     if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Upload failed');
+        let errorMsg = 'Upload failed';
+        try {
+            const error = await response.json();
+            errorMsg = error.error || errorMsg;
+        } catch (e) {
+            errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMsg);
     }
 
     return await response.json();
