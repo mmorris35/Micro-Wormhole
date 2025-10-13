@@ -1,0 +1,34 @@
+[Unit]
+Description=Claude Code Monitor
+Documentation=https://github.com/yourusername/claude-code-monitor
+After=network.target
+
+[Service]
+Type=simple
+User=claude-monitor
+Group=claude-monitor
+WorkingDirectory=/opt/claude-monitor/claude-code-monitor
+Environment="NODE_ENV=production"
+EnvironmentFile=/opt/claude-monitor/claude-code-monitor/.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=claude-monitor
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/opt/claude-monitor/claude-code-monitor/logs
+ReadWritePaths=/opt/claude-monitor/claude-code-monitor/uploads
+ReadWritePaths=/opt/claude-monitor/claude-code-monitor/sessions.db
+
+# Resource limits
+LimitNOFILE=65536
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
