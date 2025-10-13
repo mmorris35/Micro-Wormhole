@@ -24,12 +24,12 @@
 ## Current Status: Phase 5 In Progress 🚧
 
 **Active Phase**: Phase 5 - File Upload System
-**Current Task**: 5.2 - Implement file copy with sudo
-**Completed Tasks**: 2/6 in Phase 5
+**Current Task**: 5.3 - Add drag-and-drop UI
+**Completed Tasks**: 3/6 in Phase 5
 
-**Recent Completion**: Task 5.2 file copy helper complete
+**Recent Completion**: Task 5.3 drag-and-drop UI complete
 
-**Next Action**: Complete task 5.3 drag-and-drop UI
+**Next Action**: Complete task 5.4 paste upload handler
 
 ---
 
@@ -149,7 +149,7 @@
 ### Tasks:
 - [x] 5.1 Setup multer file upload endpoint - Completed 2025-10-12 16:55
 - [x] 5.2 Implement file copy with sudo - Completed 2025-10-12 17:30
-- [ ] 5.3 Add drag-and-drop UI
+- [x] 5.3 Add drag-and-drop UI - Completed 2025-10-12 17:35
 - [ ] 5.4 Implement paste upload handler
 - [ ] 5.5 Create upload progress UI
 - [ ] 5.6 Add error handling and validation

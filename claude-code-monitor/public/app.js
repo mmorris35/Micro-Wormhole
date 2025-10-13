@@ -30,6 +30,13 @@ const stopBtn = document.getElementById('stop-btn');
 const deleteBtn = document.getElementById('delete-btn');
 const uploadBtn = document.getElementById('upload-btn');
 
+// File upload elements
+const fileInput = document.getElementById('file-input');
+const dropOverlay = document.getElementById('drop-overlay');
+const uploadProgress = document.getElementById('upload-progress');
+const uploadProgressFill = document.getElementById('upload-progress-fill');
+const uploadProgressText = document.getElementById('upload-progress-text');
+
 // ===== Helper Functions =====
 
 /**
@@ -321,6 +328,73 @@ function deleteSession() {
     }
 }
 
+// ===== File Upload Functions =====
+
+/**
+ * Uploads multiple files to the current session
+ * @param {File[]} files - Array of files to upload
+ */
+async function uploadFiles(files) {
+    if (!currentSessionId) {
+        alert('No active session');
+        return;
+    }
+
+    if (files.length === 0) {
+        return;
+    }
+
+    // Show progress
+    uploadProgress.classList.remove('hidden');
+    uploadProgressFill.style.width = '0%';
+    uploadProgressText.textContent = `Uploading ${files.length} file(s)...`;
+
+    let completed = 0;
+
+    for (const file of files) {
+        try {
+            await uploadFile(file);
+            completed++;
+
+            // Update progress
+            const percent = Math.round((completed / files.length) * 100);
+            uploadProgressFill.style.width = percent + '%';
+            uploadProgressText.textContent = `Uploaded ${completed}/${files.length} files`;
+
+        } catch (error) {
+            console.error('Upload failed:', error);
+            alert(`Failed to upload ${file.name}: ${error.message}`);
+        }
+    }
+
+    // Hide progress after delay
+    setTimeout(() => {
+        uploadProgress.classList.add('hidden');
+    }, 2000);
+}
+
+/**
+ * Uploads a single file to the current session
+ * @param {File} file - File to upload
+ * @returns {Promise<Object>} - Upload response
+ */
+async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`/api/upload/${currentSessionId}`, {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Upload failed');
+    }
+
+    return await response.json();
+}
+
 // ===== Socket.io Client =====
 
 /**
@@ -438,6 +512,42 @@ function setupEventListeners() {
     // Session action buttons
     stopBtn.addEventListener('click', stopSession);
     deleteBtn.addEventListener('click', deleteSession);
+
+    // File upload button
+    uploadBtn.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0 && currentSessionId) {
+            const files = Array.from(e.target.files);
+            uploadFiles(files);
+        }
+        fileInput.value = ''; // Reset input to allow same file again
+    });
+
+    // Drag and drop
+    terminalContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (currentSessionId) {
+            dropOverlay.classList.remove('hidden');
+        }
+    });
+
+    terminalContainer.addEventListener('dragleave', (e) => {
+        if (e.target === terminalContainer) {
+            dropOverlay.classList.add('hidden');
+        }
+    });
+
+    terminalContainer.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropOverlay.classList.add('hidden');
+
+        if (currentSessionId && e.dataTransfer.files.length > 0) {
+            uploadFiles(Array.from(e.dataTransfer.files));
+        }
+    });
 }
 
 // ===== Initialization =====
