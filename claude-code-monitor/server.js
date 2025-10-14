@@ -17,6 +17,7 @@ const ptyManager = require('./lib/pty-manager');
 const sessionManager = require('./lib/session-manager');
 const usersUtil = require('./lib/users');
 const fileManager = require('./lib/file-manager');
+const claudeScanner = require('./lib/claude-session-scanner');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -255,6 +256,54 @@ io.on('connection', (socket) => {
 
         // Clean up: detach from all sessions
         // (In a real implementation, you'd track which sessions this socket is attached to)
+    });
+
+    // ===== Claude Code Session Events =====
+
+    // List all Claude Code sessions
+    socket.on('claude:sessions:list', async () => {
+        try {
+            await claudeScanner.scanAllSessions();
+            const sessions = claudeScanner.getAllSessions();
+            socket.emit('claude:sessions:list', { sessions });
+        } catch (error) {
+            logger.error('Failed to list Claude sessions:', error);
+            socket.emit('error', { message: 'Failed to list Claude sessions' });
+        }
+    });
+
+    // Get sessions grouped by repo
+    socket.on('claude:sessions:by-repo', async () => {
+        try {
+            await claudeScanner.scanAllSessions();
+            const byRepo = claudeScanner.getSessionsByRepo();
+            socket.emit('claude:sessions:by-repo', { byRepo });
+        } catch (error) {
+            logger.error('Failed to group Claude sessions:', error);
+            socket.emit('error', { message: 'Failed to group Claude sessions' });
+        }
+    });
+
+    // Start watching a Claude session
+    socket.on('claude:session:watch', ({ sessionId }) => {
+        try {
+            socket.join(`claude-${sessionId}`);
+            claudeScanner.watchSession(sessionId, io);
+            logger.info(`Client ${socket.id} watching Claude session ${sessionId}`);
+        } catch (error) {
+            logger.error('Failed to watch Claude session:', error);
+            socket.emit('error', { message: 'Failed to watch session' });
+        }
+    });
+
+    // Stop watching a Claude session
+    socket.on('claude:session:unwatch', ({ sessionId }) => {
+        try {
+            socket.leave(`claude-${sessionId}`);
+            logger.info(`Client ${socket.id} stopped watching Claude session ${sessionId}`);
+        } catch (error) {
+            logger.error('Failed to unwatch Claude session:', error);
+        }
     });
 
     socket.on('error', (error) => {
@@ -638,6 +687,9 @@ function gracefulShutdown(signal) {
 
             // Stop all file watchers
             fileManager.stopAllWatchers();
+
+            // Stop all Claude session watchers
+            claudeScanner.stopAllWatchers();
 
             logger.info('Graceful shutdown complete');
             process.exit(0);
