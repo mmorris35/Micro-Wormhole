@@ -16,6 +16,12 @@ let currentEditorFile = null;
 // Track recently modified files
 let modifiedFiles = new Set();
 
+// ===== Claude Code Session State =====
+let claudeSessions = [];
+let currentClaudeSessionId = null;
+let claudeConversation = [];
+let currentSessionType = 'pty'; // 'pty' or 'claude'
+
 // ===== DOM Elements =====
 const sessionList = document.getElementById('session-list');
 const terminalContainer = document.getElementById('terminal-container');
@@ -72,6 +78,210 @@ function formatTime(timestamp) {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
     return date.toLocaleDateString();
+}
+
+// ===== Tab Switching =====
+
+function switchSessionTab(tabType) {
+    currentSessionType = tabType;
+
+    // Update tab buttons
+    document.querySelectorAll('.session-tab').forEach(tab => {
+        if (tab.dataset.tab === tabType) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+
+    // Update containers
+    document.querySelectorAll('.sessions-container').forEach(container => {
+        container.classList.remove('active');
+    });
+
+    if (tabType === 'pty') {
+        document.getElementById('pty-sessions-container').classList.add('active');
+    } else {
+        document.getElementById('claude-sessions-container').classList.add('active');
+        loadClaudeSessions();
+    }
+}
+
+// ===== Claude Session Rendering =====
+
+function renderClaudeSessions(sessionsData) {
+    const container = document.getElementById('claude-sessions-by-repo');
+    container.innerHTML = '';
+
+    const repos = Object.keys(sessionsData).sort();
+
+    if (repos.length === 0) {
+        container.innerHTML = '<p style="padding:12px;color:#808080">No Claude Code sessions found</p>';
+        return;
+    }
+
+    repos.forEach(repoPath => {
+        const sessions = sessionsData[repoPath];
+        const repoName = sessions[0].repoName;
+
+        const repoGroup = document.createElement('div');
+        repoGroup.className = 'claude-repo-group';
+
+        const repoHeader = document.createElement('div');
+        repoHeader.className = 'claude-repo-header';
+        repoHeader.innerHTML = `
+            <div>
+                <div>📁 ${escapeHtml(repoName)}</div>
+                <div class="claude-repo-path">${escapeHtml(repoPath)}</div>
+            </div>
+            <span>${sessions.length} session${sessions.length === 1 ? '' : 's'}</span>
+        `;
+
+        const sessionsList = document.createElement('div');
+        sessionsList.className = 'claude-sessions-list';
+
+        sessions.forEach(session => {
+            const item = document.createElement('div');
+            item.className = 'claude-session-item';
+            if (session.id === currentClaudeSessionId) {
+                item.classList.add('active');
+            }
+
+            const shortId = session.id.substring(0, 8);
+            const statusClass = session.isActive ? 'active' : 'inactive';
+            const statusText = session.isActive ? 'active' : 'inactive';
+            const lastModified = formatTime(session.lastModified);
+
+            item.innerHTML = `
+                <div class="claude-session-header">
+                    <span class="claude-session-id">${escapeHtml(shortId)}</span>
+                    <span class="claude-session-status ${statusClass}">${statusText}</span>
+                </div>
+                <div class="claude-session-info">
+                    <span class="claude-session-badge">💬 ${session.messageCount}</span>
+                    <span class="claude-session-badge">👤 ${escapeHtml(session.username)}</span>
+                    <span class="claude-session-badge">🕐 ${lastModified}</span>
+                </div>
+            `;
+
+            item.addEventListener('click', () => {
+                viewClaudeSession(session.id);
+            });
+
+            sessionsList.appendChild(item);
+        });
+
+        repoGroup.appendChild(repoHeader);
+        repoGroup.appendChild(sessionsList);
+        container.appendChild(repoGroup);
+    });
+
+    // Store sessions for later use
+    claudeSessions = Object.values(sessionsData).flat();
+}
+
+function loadClaudeSessions() {
+    socket.emit('claude:sessions:by-repo');
+}
+
+function viewClaudeSession(sessionId) {
+    currentClaudeSessionId = sessionId;
+
+    // Update active state in sidebar
+    document.querySelectorAll('.claude-session-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.currentTarget.classList.add('active');
+
+    // Request conversation
+    socket.emit('claude:conversation:read', { sessionId, offset: 0, limit: 100 });
+
+    // Start watching for updates
+    socket.emit('claude:session:watch', { sessionId });
+}
+
+function renderClaudeConversation(messages) {
+    // Hide terminal, show conversation viewer
+    terminalContainer.classList.add('hidden');
+    noSessionDiv.classList.add('hidden');
+
+    // Create or get conversation container
+    let convContainer = document.getElementById('conversation-container');
+    if (!convContainer) {
+        convContainer = document.createElement('div');
+        convContainer.id = 'conversation-container';
+        convContainer.className = 'conversation-container';
+        document.querySelector('.main-area').appendChild(convContainer);
+    }
+
+    convContainer.classList.remove('hidden');
+    convContainer.innerHTML = '';
+
+    // Update title
+    const session = claudeSessions.find(s => s.id === currentClaudeSessionId);
+    if (session) {
+        terminalTitle.textContent = `${session.repoName} - ${session.id.substring(0, 8)}`;
+    }
+
+    // Render messages
+    messages.forEach(msg => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `conversation-message ${msg.type}`;
+
+        if (msg.type === 'user') {
+            msgDiv.innerHTML = `
+                <div class="message-header">
+                    <span class="message-role">👤 User</span>
+                    <span class="message-time">${formatTime(msg.timestamp)}</span>
+                </div>
+                <div class="message-content">${renderMessageContent(msg.content)}</div>
+            `;
+        } else if (msg.type === 'assistant') {
+            msgDiv.innerHTML = `
+                <div class="message-header">
+                    <span class="message-role">🤖 Claude</span>
+                    <span class="message-time">${formatTime(msg.timestamp)}</span>
+                </div>
+                <div class="message-content">${renderMessageContent(msg.content)}</div>
+            `;
+        }
+
+        convContainer.appendChild(msgDiv);
+    });
+
+    // Scroll to bottom
+    convContainer.scrollTop = convContainer.scrollHeight;
+}
+
+function renderMessageContent(content) {
+    if (typeof content === 'string') {
+        return escapeHtml(content);
+    }
+
+    if (Array.isArray(content)) {
+        return content.map(block => {
+            if (block.type === 'text') {
+                return `<p>${escapeHtml(block.text)}</p>`;
+            } else if (block.type === 'tool_use') {
+                return `
+                    <div class="tool-use">
+                        <div class="tool-name">🔧 ${escapeHtml(block.name)}</div>
+                        <pre class="tool-input">${escapeHtml(JSON.stringify(block.input, null, 2))}</pre>
+                    </div>
+                `;
+            } else if (block.type === 'tool_result') {
+                return `
+                    <div class="tool-result">
+                        <div class="tool-result-header">📋 Tool Result</div>
+                        <pre class="tool-result-content">${escapeHtml(block.content || '')}</pre>
+                    </div>
+                `;
+            }
+            return '';
+        }).join('');
+    }
+
+    return escapeHtml(JSON.stringify(content));
 }
 
 // ===== Session List Rendering =====
@@ -839,6 +1049,33 @@ function initSocket() {
         console.log(`File watching stopped for session ${sessionId}`);
     });
 
+    // ===== Claude Code Session Events =====
+
+    // Claude sessions list by repo
+    socket.on('claude:sessions:by-repo', ({ byRepo }) => {
+        renderClaudeSessions(byRepo);
+    });
+
+    // Claude conversation read
+    socket.on('claude:conversation:read', ({ sessionId, messages, total, hasMore }) => {
+        if (sessionId !== currentClaudeSessionId) return;
+
+        claudeConversation = messages;
+        renderClaudeConversation(messages);
+    });
+
+    // Claude session updated
+    socket.on('claude:session:updated', ({ sessionId }) => {
+        if (sessionId === currentClaudeSessionId) {
+            // Reload conversation
+            socket.emit('claude:conversation:read', {
+                sessionId,
+                offset: 0,
+                limit: 100
+            });
+        }
+    });
+
     // Error event
     socket.on('error', (data) => {
         console.error('Socket.io error:', data.message);
@@ -880,6 +1117,15 @@ function setupEventListeners() {
     // Session action buttons
     stopBtn.addEventListener('click', stopSession);
     deleteBtn.addEventListener('click', deleteSession);
+
+    // Session type tabs
+    document.getElementById('tab-pty-sessions').addEventListener('click', () => {
+        switchSessionTab('pty');
+    });
+
+    document.getElementById('tab-claude-sessions').addEventListener('click', () => {
+        switchSessionTab('claude');
+    });
 
     // File upload button
     uploadBtn.addEventListener('click', () => {

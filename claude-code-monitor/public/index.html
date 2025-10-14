@@ -17,8 +17,29 @@
                 <h1>Claude Code Monitor</h1>
                 <button id="new-session-btn" class="btn btn-primary">New Session</button>
             </div>
-            <div class="session-list" id="session-list">
-                <!-- Session items will be inserted here by JavaScript -->
+
+            <!-- Session Type Tabs -->
+            <div class="session-tabs">
+                <button id="tab-pty-sessions" class="session-tab active" data-tab="pty">
+                    <span>🖥️ PTY Sessions</span>
+                </button>
+                <button id="tab-claude-sessions" class="session-tab" data-tab="claude">
+                    <span>🤖 Claude Code</span>
+                </button>
+            </div>
+
+            <!-- PTY Sessions List (existing) -->
+            <div id="pty-sessions-container" class="sessions-container active">
+                <div class="session-list" id="session-list">
+                    <!-- PTY session items will be inserted here by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Claude Sessions List (new) -->
+            <div id="claude-sessions-container" class="sessions-container hidden">
+                <div id="claude-sessions-by-repo">
+                    <!-- Will be populated by JavaScript -->
+                </div>
             </div>
         </aside>
 

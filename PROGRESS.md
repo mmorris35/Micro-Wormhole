@@ -1,6 +1,6 @@
 # Development Progress
 
-**Last Updated**: 2025-10-13
+**Last Updated**: 2025-10-14
 
 ---
 
@@ -21,15 +21,15 @@
 
 ---
 
-## Current Status: Phase 9 Task 9.2 Complete ✅
+## Current Status: Phase 9 Task 9.3 Complete ✅
 
 **Active Phase**: Phase 9 - Claude Code Session Discovery & Viewing
-**Current Task**: Task 9.2 complete, ready for Task 9.3
-**Completed Tasks**: 2/5 in Phase 9
+**Current Task**: Task 9.3 complete, ready for Task 9.4
+**Completed Tasks**: 3/5 in Phase 9
 
-**Recent Completion**: Task 9.2 JSONL parser for conversation history complete
+**Recent Completion**: Task 9.3 Update UI to display Claude Code sessions complete
 
-**Next Action**: Start Task 9.3 - Update UI to display Claude Code sessions
+**Next Action**: Start Task 9.4 - Integrate file viewing from conversation
 
 ---
 
@@ -269,7 +269,7 @@
 ### Tasks:
 - [x] 9.1 Create Claude Code session scanner backend - Completed 2025-10-13 17:00
 - [x] 9.2 Create JSONL parser for conversation history - Completed 2025-10-14 00:15
-- [ ] 9.3 Update UI to display Claude Code sessions
+- [x] 9.3 Update UI to display Claude Code sessions - Completed 2025-10-14 00:55
 - [ ] 9.4 Integrate file viewing from conversation
 - [ ] 9.5 Documentation and testing
 
@@ -277,10 +277,10 @@
 - [x] Backend scans ~/.claude/projects/ for all users
 - [x] Session metadata extracted (repo, session ID, status, last activity)
 - [x] JSONL parser reads conversation history
-- [ ] UI displays Claude Code sessions separate from PTY sessions
-- [ ] Clicking a Claude session shows conversation history
-- [ ] Active sessions update in real-time
-- [ ] File edits from conversation viewable in Monaco Editor
+- [x] UI displays Claude Code sessions separate from PTY sessions
+- [x] Clicking a Claude session shows conversation history
+- [x] Active sessions update in real-time
+- [ ] File edits from conversation viewable in Monaco Editor (Task 9.4)
 - [ ] All task branches merged to phase-9-claude-sessions
 - [ ] Phase branch ready to merge to main
 
