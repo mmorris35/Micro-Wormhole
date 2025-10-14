@@ -18,6 +18,7 @@ const sessionManager = require('./lib/session-manager');
 const usersUtil = require('./lib/users');
 const fileManager = require('./lib/file-manager');
 const claudeScanner = require('./lib/claude-session-scanner');
+const jsonlParser = require('./lib/claude-jsonl-parser');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -303,6 +304,67 @@ io.on('connection', (socket) => {
             logger.info(`Client ${socket.id} stopped watching Claude session ${sessionId}`);
         } catch (error) {
             logger.error('Failed to unwatch Claude session:', error);
+        }
+    });
+
+    // Read full conversation
+    socket.on('claude:conversation:read', async ({ sessionId, offset, limit }) => {
+        try {
+            const session = claudeScanner.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            const page = await jsonlParser.readMessagesPage(
+                session.filePath,
+                offset || 0,
+                limit || 50
+            );
+
+            socket.emit('claude:conversation:read', { sessionId, ...page });
+        } catch (error) {
+            logger.error('Failed to read conversation:', error);
+            socket.emit('error', { message: 'Failed to read conversation' });
+        }
+    });
+
+    // Get session summary
+    socket.on('claude:session:summary', async ({ sessionId }) => {
+        try {
+            const session = claudeScanner.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            const summary = await jsonlParser.getSessionSummary(session.filePath);
+            socket.emit('claude:session:summary', { sessionId, summary });
+        } catch (error) {
+            logger.error('Failed to get session summary:', error);
+            socket.emit('error', { message: 'Failed to get session summary' });
+        }
+    });
+
+    // Get new messages since timestamp
+    socket.on('claude:conversation:poll', async ({ sessionId, afterTimestamp }) => {
+        try {
+            const session = claudeScanner.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            const newMessages = await jsonlParser.getNewMessages(
+                session.filePath,
+                afterTimestamp
+            );
+
+            if (newMessages.length > 0) {
+                socket.emit('claude:conversation:new-messages', {
+                    sessionId,
+                    messages: newMessages
+                });
+            }
+        } catch (error) {
+            logger.error('Failed to poll for new messages:', error);
         }
     });
 

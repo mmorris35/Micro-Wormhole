@@ -21,15 +21,15 @@
 
 ---
 
-## Current Status: Phase 9 Task 9.1 Complete ✅
+## Current Status: Phase 9 Task 9.2 Complete ✅
 
 **Active Phase**: Phase 9 - Claude Code Session Discovery & Viewing
-**Current Task**: Task 9.1 complete, ready for Task 9.2
-**Completed Tasks**: 1/5 in Phase 9
+**Current Task**: Task 9.2 complete, ready for Task 9.3
+**Completed Tasks**: 2/5 in Phase 9
 
-**Recent Completion**: Task 9.1 Claude Code session scanner backend complete
+**Recent Completion**: Task 9.2 JSONL parser for conversation history complete
 
-**Next Action**: Start Task 9.2 - Create JSONL parser for conversation history
+**Next Action**: Start Task 9.3 - Update UI to display Claude Code sessions
 
 ---
 
@@ -268,7 +268,7 @@
 
 ### Tasks:
 - [x] 9.1 Create Claude Code session scanner backend - Completed 2025-10-13 17:00
-- [ ] 9.2 Create JSONL parser for conversation history
+- [x] 9.2 Create JSONL parser for conversation history - Completed 2025-10-14 00:15
 - [ ] 9.3 Update UI to display Claude Code sessions
 - [ ] 9.4 Integrate file viewing from conversation
 - [ ] 9.5 Documentation and testing
@@ -276,7 +276,7 @@
 ### Completion Criteria:
 - [x] Backend scans ~/.claude/projects/ for all users
 - [x] Session metadata extracted (repo, session ID, status, last activity)
-- [ ] JSONL parser reads conversation history
+- [x] JSONL parser reads conversation history
 - [ ] UI displays Claude Code sessions separate from PTY sessions
 - [ ] Clicking a Claude session shows conversation history
 - [ ] Active sessions update in real-time
