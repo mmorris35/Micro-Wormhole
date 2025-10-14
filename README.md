@@ -4,13 +4,19 @@ Web application for monitoring and interacting with Claude Code sessions from an
 
 ## Features
 
-- **Multi-Session Management**: Run multiple Claude Code sessions simultaneously
-- **Multi-User Support**: Each session runs as a specific Linux user with isolated credentials
+- **Multi-Session Management**: Run multiple PTY sessions simultaneously
+- **Claude Code Viewer**: Browse and view existing Claude Code conversations
+- **Session Discovery**: Automatically finds Claude sessions across all users
+- **Repository Grouping**: Sessions organized by Git repository
+- **Conversation History**: Full message history with tool calls
+- **File Integration**: Click files in conversations to view in editor
+- **Real-Time Updates**: Active sessions update automatically
+- **Multi-User Support**: Each session runs as a specific Linux user
 - **Real-Time Terminal**: WebSocket-based terminal with xterm.js
 - **File Upload**: Drag-and-drop, paste, or button upload (iOS compatible)
-- **Session Persistence**: SQLite database tracks all sessions
+- **Monaco Editor**: View and browse files with syntax highlighting
+- **Session Persistence**: SQLite database tracks PTY sessions
 - **Responsive UI**: Works on desktop, tablet, and mobile devices
-- **Secure**: User isolation, sudo-based process spawning, file ownership management
 
 ## Screenshot
 

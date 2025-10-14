@@ -85,7 +85,9 @@ lib/
   ├── database.js            # better-sqlite3 initialization, sessions table
   ├── sessions-db.js         # Session CRUD operations (data access layer)
   ├── pty-manager.js         # PTY process manager (node-pty wrapper)
-  └── users.js               # System user enumeration (/etc/passwd parsing)
+  ├── users.js               # System user enumeration (/etc/passwd parsing)
+  ├── session-scanner.js     # Claude Code session discovery and monitoring
+  └── jsonl-parser.js        # Claude Code conversation history parser
 ```
 
 **Frontend (Vanilla JS):**
@@ -95,6 +97,60 @@ public/
   ├── style.css              # VSCode dark theme styling
   └── app.js                 # Socket.io client, xterm.js integration
 ```
+
+### Claude Code Session Viewing
+
+The application now supports viewing existing Claude Code sessions in addition to creating new PTY sessions.
+
+**Session Types:**
+
+1. **PTY Sessions** (original feature):
+   - Create new bash/command sessions
+   - Real-time terminal with xterm.js
+   - File upload support
+   - Run as different Linux users
+
+2. **Claude Code Sessions** (new feature):
+   - View existing Claude Code conversations
+   - Browse by repository
+   - See conversation history
+   - View file operations
+   - Click to open files in Monaco Editor
+   - Real-time updates for active sessions
+
+**Architecture:**
+
+**Session Discovery**:
+- Scans `~/.claude/projects/` for all users
+- Parses JSONL conversation files
+- Detects active processes via `ps` grep
+- Groups sessions by repository
+
+**JSONL Parser**:
+- Reads conversation history
+- Extracts tool calls
+- Identifies file operations
+- Supports pagination
+
+**Real-Time Updates**:
+- fs.watch monitors JSONL files
+- Socket.io broadcasts updates
+- New messages appear automatically
+
+**Socket.io Events:**
+
+**Claude Session Events**:
+- `claude:sessions:list` - Get all Claude sessions
+- `claude:sessions:by-repo` - Get sessions grouped by repo
+- `claude:session:watch` - Start watching session for updates
+- `claude:session:unwatch` - Stop watching session
+- `claude:conversation:read` - Read conversation with pagination
+- `claude:session:summary` - Get session statistics
+- `claude:session:updated` - Server broadcast when file changes
+
+**File Integration:**
+
+Files referenced in tool calls are clickable and open in Monaco Editor panel.
 
 ### Key Architectural Decisions
 
@@ -276,6 +332,8 @@ sudo -u claude-monitor sudo -u user1 bash -c 'whoami'
 ## Socket.io Event Reference
 
 ### Client → Server
+
+**PTY Session Events:**
 - `users:list` - Get system users (returns usernames from /home/*)
 - `session:create` - { name, command, workingDirectory, runAsUser }
 - `session:list` - Get all sessions
@@ -286,7 +344,23 @@ sudo -u claude-monitor sudo -u user1 bash -c 'whoami'
 - `terminal:input` - { sessionId, data } (write to PTY stdin)
 - `terminal:resize` - { sessionId, cols, rows } (resize PTY)
 
+**Claude Code Session Events:**
+- `claude:sessions:list` - Get all Claude Code sessions
+- `claude:sessions:by-repo` - Get sessions grouped by repository
+- `claude:session:watch` - { sessionId } (start watching for updates)
+- `claude:session:unwatch` - { sessionId } (stop watching)
+- `claude:conversation:read` - { sessionId, offset, limit } (read conversation)
+- `claude:session:summary` - { sessionId } (get session statistics)
+
+**File Events:**
+- `file:list` - { sessionId, path } (list directory contents)
+- `file:read` - { sessionId, path, workingDir } (read file contents)
+- `file:watch:start` - { sessionId } (start watching directory)
+- `file:watch:stop` - { sessionId } (stop watching directory)
+
 ### Server → Client
+
+**PTY Session Events:**
 - `users:list` - { users: string[] }
 - `session:list` - { sessions: Session[] }
 - `session:created` - { session: Session }
@@ -294,6 +368,20 @@ sudo -u claude-monitor sudo -u user1 bash -c 'whoami'
 - `session:deleted` - { sessionId }
 - `terminal:output` - { sessionId, data } (PTY stdout/stderr)
 - `file:uploaded` - { sessionId, filename, path }
+
+**Claude Code Session Events:**
+- `claude:sessions:list` - { sessions: ClaudeSession[] }
+- `claude:sessions:by-repo` - { byRepo: { [repoPath]: ClaudeSession[] } }
+- `claude:conversation:read` - { sessionId, messages, total, hasMore }
+- `claude:session:updated` - { sessionId } (file changed notification)
+- `claude:session:summary` - { sessionId, messageCount, userMessageCount, assistantMessageCount, toolUseCount }
+
+**File Events:**
+- `file:list` - { sessionId, files: FileEntry[] }
+- `file:contents` - { sessionId, path, content, size, modified }
+- `file:changed` - { sessionId, filename, eventType }
+
+**Error Events:**
 - `error` - { message }
 
 ## Common Patterns
