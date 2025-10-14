@@ -212,14 +212,23 @@ io.on('connection', (socket) => {
     });
 
     // Read file contents
-    socket.on('file:read', async ({ sessionId, filePath }) => {
+    socket.on('file:read', async ({ sessionId, path, workingDir }) => {
         try {
-            const session = sessionsDb.getSession(sessionId);
-            if (!session) {
-                return socket.emit('error', { message: 'Session not found' });
+            let fileData;
+            const filePath = path;
+
+            if (workingDir) {
+                // Direct path read (for Claude conversation viewer)
+                fileData = await fileManager.readFile(workingDir, filePath);
+            } else {
+                // Session-based read (existing PTY sessions)
+                const session = sessionsDb.getSession(sessionId);
+                if (!session) {
+                    return socket.emit('error', { message: 'Session not found' });
+                }
+                fileData = await fileManager.readFile(session.working_directory, filePath);
             }
 
-            const fileData = await fileManager.readFile(session.working_directory, filePath);
             socket.emit('file:contents', {
                 sessionId,
                 ...fileData

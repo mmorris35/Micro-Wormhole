@@ -263,9 +263,15 @@ function renderMessageContent(content) {
             if (block.type === 'text') {
                 return `<p>${escapeHtml(block.text)}</p>`;
             } else if (block.type === 'tool_use') {
+                const filePath = extractFilePath(block);
+                const fileLink = filePath ?
+                    `<button class="file-link" onclick="openFileFromConversation('${escapeHtml(filePath)}')">📄 ${escapeHtml(filePath)}</button>` :
+                    '';
+
                 return `
                     <div class="tool-use">
                         <div class="tool-name">🔧 ${escapeHtml(block.name)}</div>
+                        ${fileLink}
                         <pre class="tool-input">${escapeHtml(JSON.stringify(block.input, null, 2))}</pre>
                     </div>
                 `;
@@ -282,6 +288,47 @@ function renderMessageContent(content) {
     }
 
     return escapeHtml(JSON.stringify(content));
+}
+
+/**
+ * Extract file path from tool call input
+ */
+function extractFilePath(toolBlock) {
+    const input = toolBlock.input || {};
+    return input.file_path || input.path || null;
+}
+
+/**
+ * Open file from conversation in Monaco Editor
+ * Called from inline onclick in HTML (renderMessageContent)
+ */
+// eslint-disable-next-line no-unused-vars
+function openFileFromConversation(filePath) {
+    if (!currentClaudeSessionId) return;
+
+    const session = claudeSessions.find(s => s.id === currentClaudeSessionId);
+    if (!session) return;
+
+    // Use repo path as working directory
+    const workingDir = session.repoPath;
+
+    // Open file in Monaco Editor
+    openFileInMonaco(filePath, workingDir);
+}
+
+/**
+ * Open file in Monaco Editor with direct path
+ */
+function openFileInMonaco(filePath, workingDir) {
+    // Read file using existing file manager
+    socket.emit('file:read', {
+        sessionId: 'claude-viewer',  // Pseudo session ID
+        path: filePath,
+        workingDir: workingDir
+    });
+
+    // Show editor panel
+    showEditorPanel();
 }
 
 // ===== Session List Rendering =====
@@ -401,7 +448,7 @@ function openFileInEditor(sessionId, filePath) {
         return;
     }
 
-    socket.emit('file:read', { sessionId, filePath });
+    socket.emit('file:read', { sessionId, path: filePath });
 }
 
 /**

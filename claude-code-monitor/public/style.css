@@ -1009,6 +1009,23 @@ textarea {
     margin-bottom: 8px;
 }
 
+.file-link {
+    display: inline-block;
+    margin: 8px 0;
+    padding: 6px 12px;
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.file-link:hover {
+    background: #2472c8;
+}
+
 .tool-input, .tool-result-content {
     background: var(--bg-tertiary);
     padding: 8px;
