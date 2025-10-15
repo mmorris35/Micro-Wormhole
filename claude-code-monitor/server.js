@@ -19,6 +19,7 @@ const usersUtil = require('./lib/users');
 const fileManager = require('./lib/file-manager');
 const claudeScanner = require('./lib/claude-session-scanner');
 const jsonlParser = require('./lib/claude-jsonl-parser');
+const claudePtyInjector = require('./lib/claude-pty-injector');
 
 // Configuration
 const PORT = process.env.PORT || 3456;
@@ -377,6 +378,93 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ===== Claude PTY Injection Events =====
+
+    // Initialize Claude PTY session
+    socket.on('claude:pty:init', async ({ sessionId }) => {
+        try {
+            const session = claudeScanner.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            // Spawn PTY session
+            await claudePtyInjector.spawnClaudeSession(
+                sessionId,
+                session.username,
+                session.repoPath
+            );
+
+            socket.emit('claude:pty:ready', { sessionId });
+        } catch (error) {
+            logger.error('Failed to initialize Claude PTY:', error);
+            socket.emit('error', { message: 'Failed to initialize session: ' + error.message });
+        }
+    });
+
+    // Send message to Claude PTY
+    socket.on('claude:message:send', async ({ sessionId, message, username }) => {
+        try {
+            const session = claudeScanner.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            // Validate permission
+            claudePtyInjector.validatePermission(username, session.username);
+
+            // Initialize PTY if not already
+            if (!claudePtyInjector.hasSession(sessionId)) {
+                await claudePtyInjector.spawnClaudeSession(
+                    sessionId,
+                    session.username,
+                    session.repoPath
+                );
+            }
+
+            // Send message
+            await claudePtyInjector.sendMessage(sessionId, message);
+
+            socket.emit('claude:message:sent', {
+                sessionId,
+                success: true,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            logger.error('Failed to send message to Claude:', error);
+            socket.emit('error', { message: 'Failed to send message: ' + error.message });
+        }
+    });
+
+    // Send message with file attachment
+    socket.on('claude:message:send-with-file', async ({ sessionId, message, username, filePath }) => {
+        try {
+            const session = claudeScanner.getSession(sessionId);
+            if (!session) {
+                return socket.emit('error', { message: 'Session not found' });
+            }
+
+            claudePtyInjector.validatePermission(username, session.username);
+
+            if (!claudePtyInjector.hasSession(sessionId)) {
+                await claudePtyInjector.spawnClaudeSession(
+                    sessionId,
+                    session.username,
+                    session.repoPath
+                );
+            }
+
+            await claudePtyInjector.sendMessageWithFile(sessionId, message, filePath);
+
+            socket.emit('claude:message:sent', { sessionId, success: true });
+
+        } catch (error) {
+            logger.error('Failed to send message with file:', error);
+            socket.emit('error', { message: 'Failed to send message: ' + error.message });
+        }
+    });
+
     socket.on('error', (error) => {
         logger.error(`Socket error for ${socket.id}: ${error.message}`);
     });
@@ -399,6 +487,32 @@ sessionManager.on('exit', (sessionId, exitCode, status) => {
 sessionManager.on('deleted', (sessionId) => {
     io.emit('session:deleted', { sessionId });
     io.emit('session:list', { sessions: sessionManager.getAllSessions() });
+});
+
+// Forward Claude PTY injector events to Socket.io rooms
+claudePtyInjector.on('message:assistant', (sessionId, message) => {
+    // Broadcast to all clients watching this session
+    io.to(`claude-${sessionId}`).emit('claude:message:response', {
+        sessionId,
+        message
+    });
+
+    // Also trigger session update (JSONL file will be updated by Claude)
+    io.to(`claude-${sessionId}`).emit('claude:session:updated', { sessionId });
+});
+
+claudePtyInjector.on('message:error', (sessionId, error) => {
+    io.to(`claude-${sessionId}`).emit('claude:message:error', {
+        sessionId,
+        error
+    });
+});
+
+claudePtyInjector.on('session:closed', (sessionId, exitCode) => {
+    io.to(`claude-${sessionId}`).emit('claude:pty:closed', {
+        sessionId,
+        exitCode
+    });
 });
 
 // Middleware
@@ -761,6 +875,9 @@ function gracefulShutdown(signal) {
 
             // Stop all Claude session watchers
             claudeScanner.stopAllWatchers();
+
+            // Close all Claude PTY injection sessions
+            claudePtyInjector.closeAll();
 
             logger.info('Graceful shutdown complete');
             process.exit(0);

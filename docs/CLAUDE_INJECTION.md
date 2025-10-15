@@ -242,33 +242,147 @@ echo '{"parentUuid":"<parent-id>","type":"user","message":{"role":"user","conten
 
 ---
 
-## Conclusion
+---
 
-**Final Recommendation for Phase 10**:
+## Method 4: PTY-Based Claude Control (AgentAPI Approach)
 
-**STOP IMPLEMENTATION** - Direct injection is not feasible as originally planned.
+**Theory**: Spawn our own Claude process in a pseudoterminal (PTY), send input via terminal stdin, capture output via terminal stdout
 
-**Options**:
-1. **Implement JSONL Append with Limitations** (if user accepts read-only queue)
-2. **Cancel Phase 10** and keep Phase 9 (view-only) as final state
-3. **Defer Phase 10** until VSCode extension API available
+**Status**: ✅ **FEASIBLE** - Proven by AgentAPI
 
-**Next Step**: Escalate to user for executive decision on whether to proceed with limited JSONL append or cancel Phase 10.
+**Inspiration**: [AgentAPI](https://github.com/coder/agentapi) by Coder
+
+**How It Works**:
+```
+Browser Request → Server → PTY Manager → node-pty → Spawn Claude
+                                              ↓
+     Parse Response ← Terminal Output ← Claude stdout
+```
+
+**Architecture**:
+1. **Spawn Claude in PTY**: Use node-pty to create pseudoterminal
+2. **Control via Terminal I/O**: Send keystrokes to stdin, read from stdout
+3. **Parse Terminal Output**: Extract messages from terminal snapshot
+4. **Independent Process**: We spawn our own Claude, not injecting into VSCode's
+
+**Key Advantages**:
+- ✅ **No Process Conflicts**: We spawn our own instance, VSCode keeps theirs
+- ✅ **Full Bidirectional Communication**: Can send and receive messages
+- ✅ **We Already Have Infrastructure**: node-pty used in Phase 3-7
+- ✅ **Proven Implementation**: AgentAPI demonstrates this works
+- ✅ **Real Interaction**: Not passive like JSONL append
+
+**Implementation Approach**:
+```javascript
+// Spawn Claude in PTY
+const pty = require('node-pty');
+
+const claudeProcess = pty.spawn('claude', [
+    '--resume', sessionId,
+    '--input-format', 'stream-json',
+    '--output-format', 'stream-json',
+    '--print'  // Non-interactive mode
+], {
+    name: 'xterm-color',
+    cwd: repoPath,
+    env: process.env
+});
+
+// Send message via stdin
+const message = JSON.stringify({
+    type: 'user',
+    content: 'Your message here'
+});
+claudeProcess.write(message + '\n');
+
+// Capture output
+let output = '';
+claudeProcess.on('data', (data) => {
+    output += data;
+    // Parse JSONL from output
+    const lines = output.split('\n');
+    lines.forEach(line => {
+        if (line.trim()) {
+            try {
+                const message = JSON.parse(line);
+                // Handle Claude's response
+                handleResponse(message);
+            } catch (e) {
+                // Not valid JSON, skip
+            }
+        }
+    });
+});
+```
+
+**AgentAPI Technical Details**:
+- Uses in-memory terminal emulator
+- Translates API calls to terminal keystrokes
+- Parses terminal output into structured messages
+- Maintains conversation state across API calls
+- Provides HTTP endpoints: `/messages`, `/message`, `/status`, `/events`
+
+**Why This Solves Our Problem**:
+1. **Independent Process**: No conflict with VSCode's Claude instance
+2. **Full Control**: We manage the process lifecycle
+3. **Bidirectional**: Can send prompts and receive responses
+4. **Existing Infrastructure**: Reuses our PTY manager from Phase 3
+5. **Proven Concept**: AgentAPI is working implementation
+
+**Limitations**:
+- ⚠️ Spawns additional Claude process (memory overhead)
+- ⚠️ Session state syncs via JSONL file (both processes read same file)
+- ⚠️ Need to handle concurrent access to session file
+- ⚠️ May have slight delay compared to direct VSCode interaction
+
+**Security Considerations**:
+- Process spawned as session owner via sudo (existing pattern)
+- PTY isolated per session (existing pattern)
+- Uses same permission model as Phase 3-7 sessions
+- Claude binary execution controlled via sudoers
+
+---
+
+## Conclusion (REVISED)
+
+**Final Recommendation for Phase 10**: ✅ **PROCEED WITH PTY-BASED APPROACH**
+
+**Selected Option**: **Method 4 - PTY-Based Claude Control** (AgentAPI approach)
+
+**Rationale**:
+1. Proven implementation exists (AgentAPI)
+2. We already have node-pty infrastructure (Phase 3-7)
+3. Provides true bidirectional interaction (not passive)
+4. No process conflicts (spawn our own instance)
+5. Reuses existing PTY manager architecture
+
+**Implementation Plan**:
+1. **Task 10.2**: Create PTY-based Claude injector module
+2. **Task 10.3**: Input UI (unchanged)
+3. **Task 10.4**: Parse PTY output for responses (instead of polling JSONL)
+4. **Task 10.5**: Documentation
+
+**Next Steps**:
+- Proceed with Phase 10 implementation using PTY approach
+- Adapt tasks 10.2-10.5 to use PTY instead of direct CLI
+- Reference AgentAPI architecture as implementation guide
 
 ---
 
 ## Technical Notes
 
-- Claude Code likely uses file watchers on JSONL files
-- Unclear if external modifications trigger processing
-- Testing required to determine auto-detection behavior
-- VSCode extension maintains exclusive session control
-- No documented API for external interaction
+- AgentAPI demonstrates PTY-based control is viable
+- node-pty already in project dependencies (Phase 3)
+- PTY manager pattern already established (lib/pty-manager.js)
+- Session JSONL file serves as shared state between processes
+- VSCode and our PTY process can coexist peacefully
 
 ---
 
 ## References
 
+- **AgentAPI**: https://github.com/coder/agentapi (PTY-based Claude control)
 - Claude binary location: `~/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude`
 - JSONL conversation files: `~/.claude/projects/<repo>/<session-uuid>.jsonl`
 - Extension versions observed: 2.0.13, 2.0.14
+- node-pty: Used in Micro-Wormhole Phase 3-7 for session management

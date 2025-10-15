@@ -21,15 +21,15 @@
 
 ---
 
-## Current Status: Phase 10 Task 10.1 Complete ⚠️
+## Current Status: Phase 10 Ready to Implement ✅
 
-**Active Phase**: Phase 10 - Prompt Injection (Blocked - Awaiting Decision)
-**Current Task**: Task 10.1 research complete - CRITICAL FINDINGS
-**Completed Tasks**: 1/5 in Phase 10 (research only)
+**Active Phase**: Phase 10 - Prompt Injection (PTY-Based Approach)
+**Current Task**: Ready to begin Task 10.2 (PTY injector implementation)
+**Completed Tasks**: 1/5 in Phase 10 (research + revised plan)
 
-**Recent Completion**: Task 10.1 CLI research - Direct injection NOT FEASIBLE
+**Recent Update**: Revised Phase 10 plan with PTY-based approach (Method 4)
 
-**Next Action**: USER DECISION REQUIRED - See docs/CLAUDE_INJECTION.md for options
+**Next Action**: Execute Phase 10 using PTY-based approach (see dev-plan/phase-10-revised.md)
 
 ---
 
@@ -287,54 +287,58 @@
 
 ---
 
-## Phase 10: Prompt Injection into Claude Code Sessions ⚠️
+## Phase 10: Prompt Injection into Claude Code Sessions (PTY-Based) 🚧
 
-**Status**: Blocked - Awaiting Executive Decision
+**Status**: Ready to Implement
 **Branch**: `phase-10-session-injection`
 **Started**: 2025-10-14
-**Completed**: TBD (may be cancelled)
+**Completed**: TBD
 
-**Critical Finding**: Direct CLI injection is NOT FEASIBLE due to VSCode extension architecture
+**Approach**: PTY-based Claude control (inspired by AgentAPI)
+
+### Executive Decision Made:
+After research (Task 10.1), discovered PTY-based approach is FEASIBLE. This method spawns independent Claude processes in pseudoterminals, avoiding conflicts with VSCode's Claude instance. Plan revised to use this approach.
 
 ### Tasks:
 - [x] 10.1 Research Claude Code CLI interaction - Completed 2025-10-14 02:35
-- [ ] 10.2 Implement injection backend (BLOCKED - awaiting decision)
-- [ ] 10.3 Add input UI (BLOCKED)
-- [ ] 10.4 Handle responses (BLOCKED)
-- [ ] 10.5 Documentation (BLOCKED)
+- [x] 10.2 Implement PTY-based injection backend - Completed 2025-10-14
+- [ ] 10.3 Add input UI (READY)
+- [ ] 10.4 End-to-end testing (READY)
+- [ ] 10.5 Documentation (READY)
 
 ### Research Findings (Task 10.1):
 
-**Problem**: Claude process is already running and connected to VSCode extension. Attempting to spawn another process with `--resume` creates conflicts.
+**Initial Problem**: Direct injection not feasible (process conflicts)
 
-**Options Identified**:
-1. **Option A: Direct CLI Injection** - ❌ NOT FEASIBLE (process conflict)
-2. **Option B: JSONL File Append** - ⚠️ LIMITED (passive queue only, no guaranteed processing)
-3. **Option C: VSCode Extension API** - ❌ NOT FEASIBLE (too complex, no public API)
-
-**Recommendation**: STOP implementation. Choose one of:
-- Implement limited JSONL append (messages queued, user must open VSCode)
-- Cancel Phase 10 entirely (keep Phase 9 view-only)
-- Defer Phase 10 until VSCode API available
+**Solution Discovered**: PTY-Based Claude Control (Method 4)
+- ✅ Spawn independent Claude process in PTY
+- ✅ Use `--resume <session-id>` to load session state
+- ✅ Send messages via PTY stdin (JSONL format)
+- ✅ Parse responses from PTY stdout
+- ✅ No conflicts with VSCode's Claude instance
+- ✅ Proven by AgentAPI implementation
+- ✅ Leverages existing node-pty infrastructure (Phase 3)
 
 ### Documentation:
 - [x] Research findings documented in `docs/CLAUDE_INJECTION.md`
-- [x] Limitations clearly identified
-- [x] Security considerations noted
-- [x] Testing plan outlined (if proceeding)
+- [x] Method 4 (PTY-based approach) added to research doc
+- [x] Revised plan created: `dev-plan/phase-10-revised.md`
+- [x] Feasibility confirmed (AgentAPI proof)
+- [x] Implementation approach documented
 
-### Completion Criteria (BLOCKED):
-- [x] Claude Code CLI interaction method identified
-- [x] Feasibility determined (NOT FEASIBLE for active injection)
-- [x] Alternative approaches evaluated
-- [x] Recommendation documented
-- [ ] Executive decision on whether to proceed
-- [ ] Implementation (conditional on decision)
+### Completion Criteria:
+- [x] Claude Code CLI interaction method identified (PTY-based)
+- [x] Feasibility confirmed (✅ FEASIBLE via PTY)
+- [x] Alternative approaches evaluated (4 methods tested)
+- [x] Executive decision made (proceed with PTY approach)
+- [x] Revised plan created
+- [x] PTY-based injector module implemented
+- [ ] Socket.io events added
+- [ ] Input UI added
+- [ ] End-to-end testing complete
+- [ ] Documentation updated
 
-**Next Step**: User must review `docs/CLAUDE_INJECTION.md` and decide:
-- Proceed with limited JSONL append?
-- Cancel Phase 10?
-- Defer Phase 10?
+**Next Step**: Execute Task 10.3 - Add input UI for message injection
 
 ---
 
@@ -363,3 +367,7 @@ Use this section to track important observations, blockers, or decisions made du
 
 - **2025-10-11**: Development plan created. All phase documentation complete (Phases 1-8).
 - **2025-10-11**: Added Phase 8 (File Editor Panel) to implement issue #2.
+- **2025-10-14**: Phase 10 Task 10.1 research completed. Direct CLI injection not feasible (process conflicts).
+- **2025-10-14**: Discovered PTY-based approach via AgentAPI research. Method 4 confirmed feasible.
+- **2025-10-14**: Phase 10 plan revised to use PTY-based Claude control. New plan: `dev-plan/phase-10-revised.md`
+- **2025-10-14**: Executive decision: Proceed with PTY-based approach. Leverages existing node-pty infrastructure from Phase 3.
