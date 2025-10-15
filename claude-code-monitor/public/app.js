@@ -198,6 +198,11 @@ function viewClaudeSession(sessionId) {
 
     // Start watching for updates
     socket.emit('claude:session:watch', { sessionId });
+
+    // Show input box
+    window.showClaudeInput();
+
+    // PTY will auto-initialize on first message send
 }
 
 function renderClaudeConversation(messages) {
@@ -783,6 +788,9 @@ function attachToSession(sessionId) {
         uploadBtn.removeAttribute('disabled');
         document.getElementById('paste-trigger')?.removeAttribute('disabled');
 
+        // Hide Claude input (this is a PTY session, not Claude)
+        window.hideClaudeInput();
+
         renderSessions();
         socket.emit('session:attach', { sessionId });
 
@@ -1345,6 +1353,292 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.style.opacity = '1';
         });
     });
+
+    // ===== Claude PTY Message Injection =====
+
+    let attachedFile = null;
+    let ptyReady = false;
+
+    function setupClaudeInput() {
+        const inputForm = document.getElementById('claude-input-form');
+        const messageInput = document.getElementById('claude-message-input');
+        const attachFileBtn = document.getElementById('attach-file-btn');
+
+        if (!inputForm || !messageInput || !attachFileBtn) {
+            return; // Elements not in DOM yet
+        }
+
+        // Send message form
+        inputForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            sendClaudeMessage();
+        });
+
+        // Attach file button
+        attachFileBtn.addEventListener('click', () => {
+            showFilePickerForAttachment();
+        });
+
+        // Allow Ctrl+Enter to send
+        messageInput.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                sendClaudeMessage();
+            }
+        });
+    }
+
+    function sendClaudeMessage() {
+        const messageInput = document.getElementById('claude-message-input');
+        const message = messageInput.value.trim();
+
+        if (!message && !attachedFile) {
+            return;
+        }
+
+        if (!currentClaudeSessionId) {
+            alert('No Claude session selected');
+            return;
+        }
+
+        const session = claudeSessions.find(s => s.id === currentClaudeSessionId);
+        if (!session) {
+            alert('Session not found');
+            return;
+        }
+
+        if (!session.isActive) {
+            alert('Cannot send message to inactive session');
+            return;
+        }
+
+        // Show sending indicator
+        messageInput.disabled = true;
+        messageInput.placeholder = 'Sending...';
+        setPtyStatus('Sending message...', 'initializing');
+
+        // Emit message
+        if (attachedFile) {
+            socket.emit('claude:message:send-with-file', {
+                sessionId: currentClaudeSessionId,
+                message: message || 'See attached file',
+                username: session.username,
+                filePath: attachedFile
+            });
+        } else {
+            socket.emit('claude:message:send', {
+                sessionId: currentClaudeSessionId,
+                message: message,
+                username: session.username
+            });
+        }
+    }
+
+    function setPtyStatus(message, status) {
+        const statusDiv = document.getElementById('pty-status');
+        if (!statusDiv) return;
+
+        statusDiv.textContent = message;
+        statusDiv.className = `pty-status ${status}`;
+        statusDiv.classList.remove('hidden');
+
+        if (status === 'ready' || status === 'error') {
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 3000);
+        }
+    }
+
+    function showFilePickerForAttachment() {
+        const session = claudeSessions.find(s => s.id === currentClaudeSessionId);
+        if (!session) return;
+
+        // Simple prompt for file path (can be enhanced with file browser)
+        const filePath = prompt('Enter file path to attach (relative to repo root):');
+        if (filePath) {
+            attachFile(filePath);
+        }
+    }
+
+    function attachFile(filePath) {
+        attachedFile = filePath;
+
+        const attachedFileDiv = document.getElementById('attached-file');
+        if (!attachedFileDiv) return;
+
+        attachedFileDiv.classList.remove('hidden');
+        attachedFileDiv.innerHTML = `
+            <span>📎 ${escapeHtml(filePath)}</span>
+            <span class="remove-file" onclick="removeAttachedFile()">×</span>
+        `;
+    }
+
+    window.removeAttachedFile = function() {
+        attachedFile = null;
+        const attachedFileDiv = document.getElementById('attached-file');
+        if (attachedFileDiv) {
+            attachedFileDiv.classList.add('hidden');
+        }
+    };
+
+    function showTypingIndicator() {
+        const container = document.getElementById('conversation-container');
+        if (!container) return;
+
+        // Remove existing indicator
+        hideTypingIndicator();
+
+        const indicator = document.createElement('div');
+        indicator.id = 'typing-indicator';
+        indicator.className = 'conversation-message assistant';
+        indicator.innerHTML = `
+            <div class="message-header">
+                <span class="message-role">🤖 Claude</span>
+            </div>
+            <div class="typing-dots">
+                <span></span><span></span><span></span>
+            </div>
+        `;
+
+        container.appendChild(indicator);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function hideTypingIndicator() {
+        const indicator = document.getElementById('typing-indicator');
+        if (indicator) {
+            indicator.remove();
+        }
+    }
+
+    function showNotification(message, type = 'info') {
+        // Simple notification (can be enhanced)
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            background: ${type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--info)'};
+            color: white;
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            z-index: 10000;
+        `;
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+
+    window.showClaudeInput = function() {
+        const inputContainer = document.getElementById('claude-input-container');
+        if (!inputContainer) return;
+
+        inputContainer.classList.remove('hidden');
+
+        const session = claudeSessions.find(s => s.id === currentClaudeSessionId);
+        if (session && !session.isActive) {
+            inputContainer.classList.add('disabled');
+        } else {
+            inputContainer.classList.remove('disabled');
+            ptyReady = false; // Will be set to true when PTY initializes
+        }
+    };
+
+    window.hideClaudeInput = function() {
+        const inputContainer = document.getElementById('claude-input-container');
+        if (inputContainer) {
+            inputContainer.classList.add('hidden');
+        }
+    };
+
+    // Socket.io handlers for PTY injection
+
+    socket.on('claude:pty:ready', ({ sessionId }) => {
+        if (sessionId === currentClaudeSessionId) {
+            ptyReady = true;
+            setPtyStatus('PTY ready - you can send messages', 'ready');
+            console.log(`Claude PTY ready for session ${sessionId}`);
+        }
+    });
+
+    socket.on('claude:message:sent', ({ sessionId }) => {
+        if (sessionId === currentClaudeSessionId) {
+            // Clear input
+            const messageInput = document.getElementById('claude-message-input');
+            if (messageInput) {
+                messageInput.value = '';
+                messageInput.disabled = false;
+                messageInput.placeholder = 'Type your message to Claude...';
+            }
+
+            // Remove attachment
+            window.removeAttachedFile();
+
+            // Show success feedback
+            setPtyStatus('Message sent!', 'ready');
+            showNotification('Message sent to Claude!', 'success');
+
+            // Show typing indicator
+            showTypingIndicator();
+        }
+    });
+
+    socket.on('claude:message:response', ({ sessionId, message }) => {
+        if (sessionId === currentClaudeSessionId) {
+            // Hide typing indicator
+            hideTypingIndicator();
+
+            // Add message to conversation view
+            const container = document.getElementById('conversation-container');
+            if (container) {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = `conversation-message ${message.type}`;
+
+                if (message.type === 'assistant') {
+                    msgDiv.innerHTML = `
+                        <div class="message-header">
+                            <span class="message-role">🤖 Claude</span>
+                            <span class="message-time">${formatTime(message.timestamp)}</span>
+                        </div>
+                        <div class="message-content">${renderMessageContent(message.content)}</div>
+                    `;
+                }
+
+                container.appendChild(msgDiv);
+                container.scrollTop = container.scrollHeight;
+            }
+
+            // Show notification
+            showNotification('Claude responded!', 'info');
+
+            console.log(`Claude response received for session ${sessionId}`);
+        }
+    });
+
+    socket.on('claude:message:error', ({ sessionId, error }) => {
+        if (sessionId === currentClaudeSessionId) {
+            hideTypingIndicator();
+            setPtyStatus('Error: ' + error.message, 'error');
+            showNotification('Error: ' + error.message, 'error');
+        }
+    });
+
+    socket.on('claude:pty:closed', ({ sessionId, exitCode }) => {
+        if (sessionId === currentClaudeSessionId) {
+            ptyReady = false;
+            setPtyStatus('PTY session closed', 'error');
+            console.warn(`Claude PTY closed for session ${sessionId}, exit code: ${exitCode}`);
+        }
+    });
+
+    // Initialize Claude input
+    setupClaudeInput();
 
     console.log('Claude Code Monitor - Frontend initialized');
 });

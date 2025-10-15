@@ -70,6 +70,28 @@
                 <h2>No session selected</h2>
                 <p>Create a new session or select an existing one from the sidebar</p>
             </div>
+
+            <!-- Claude Message Input (shown when viewing Claude session) -->
+            <div id="claude-input-container" class="claude-input-container hidden">
+                <form id="claude-input-form" class="claude-input-form">
+                    <textarea
+                        id="claude-message-input"
+                        class="claude-message-input"
+                        placeholder="Type your message to Claude..."
+                        rows="3"
+                    ></textarea>
+                    <div class="claude-input-actions">
+                        <button type="button" id="attach-file-btn" class="btn-icon" title="Attach file">
+                            📎
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            Send to Claude
+                        </button>
+                    </div>
+                    <div id="attached-file" class="attached-file hidden"></div>
+                    <div id="pty-status" class="pty-status hidden"></div>
+                </form>
+            </div>
         </main>
     </div>
 
