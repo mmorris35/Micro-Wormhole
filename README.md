@@ -4,6 +4,11 @@ Web application for monitoring and interacting with Claude Code sessions from an
 
 ## Features
 
+- **Prompt Injection**: Send messages to Claude Code sessions via PTY
+- **Interactive Sessions**: Chat with Claude from the browser
+- **File Attachments**: Include repo files in messages to Claude
+- **Real-time Responses**: See Claude's responses as they arrive
+- **PTY-Based**: Independent Claude processes, no conflicts with VSCode
 - **Multi-Session Management**: Run multiple PTY sessions simultaneously
 - **Claude Code Viewer**: Browse and view existing Claude Code conversations
 - **Session Discovery**: Automatically finds Claude sessions across all users

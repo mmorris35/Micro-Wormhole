@@ -152,6 +152,54 @@ The application now supports viewing existing Claude Code sessions in addition t
 
 Files referenced in tool calls are clickable and open in Monaco Editor panel.
 
+### Prompt Injection (PTY-Based)
+
+You can send messages to Claude Code sessions from the browser using PTY-based injection.
+
+**Architecture:**
+- Spawns independent Claude process in pseudoterminal (PTY)
+- Uses `--resume <session-id>` to load session state
+- Sends messages via PTY stdin (JSONL format)
+- Parses responses from PTY stdout
+- No process conflicts with VSCode's Claude instance
+
+**Requirements:**
+- Session must be active (have JSONL file)
+- Must be session owner (username match)
+- Sudo configuration for Claude binary
+- node-pty (already installed in Phase 3)
+
+**Features:**
+- Send text messages
+- Attach files from repository
+- Real-time response display via PTY output
+- Typing indicator
+- Auto-scroll to new messages
+- PTY status indicator
+
+**Security:**
+- Permission validation (only owner can inject)
+- Sudo isolation per user
+- Independent PTY process per session
+- Process lifecycle management (auto-cleanup)
+
+**Socket.io Events:**
+- `claude:pty:init` - Initialize PTY session (optional, auto-initializes on first message)
+- `claude:message:send` - Send text message
+- `claude:message:send-with-file` - Send with file attachment
+- `claude:message:sent` - Confirmation
+- `claude:message:response` - Claude's response received
+- `claude:message:error` - Error occurred
+- `claude:pty:ready` - PTY session ready
+- `claude:pty:closed` - PTY session closed
+
+**Technical Notes:**
+- Based on AgentAPI approach (github.com/coder/agentapi)
+- Reuses existing PTY infrastructure from Phase 3-7
+- Both VSCode and PTY processes read same JSONL file for state
+- PTY spawned on-demand (first message)
+- Graceful shutdown handling
+
 ### Key Architectural Decisions
 
 **Multi-User Process Spawning:**
