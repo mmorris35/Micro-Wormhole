@@ -3,14 +3,13 @@
 const pty = require('node-pty');
 const fs = require('fs').promises;
 const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 const logger = require('./logger');
 const EventEmitter = require('events');
 
 class ClaudePTYInjector extends EventEmitter {
     constructor() {
         super();
-        this.processes = new Map(); // sessionId -> { pty, buffer, pending }
+        this.processes = new Map(); // sessionId -> { pty, username, repoPath, createdAt }
     }
 
     /**
@@ -39,9 +38,12 @@ class ClaudePTYInjector extends EventEmitter {
                 'claude'
             );
 
+            logger.info(`Found Claude extension directory: ${latestDir}`);
+
             // Verify binary exists and is executable
             await fs.access(binaryPath, fs.constants.X_OK);
 
+            logger.info(`Claude binary verified: ${binaryPath}`);
             return binaryPath;
         } catch (error) {
             logger.error(`Failed to get Claude binary for ${username}:`, error);
@@ -50,121 +52,167 @@ class ClaudePTYInjector extends EventEmitter {
     }
 
     /**
-     * Spawn Claude process in PTY for session
+     * Find newest Claude session JSONL in a repo directory
      *
-     * @param {string} sessionId - Claude session ID
+     * @param {string} username - User who owns sessions
+     * @param {string} repoPath - Repository path
+     * @returns {Promise<string|null>} - Session ID or null
+     */
+    async findNewestSession(username, repoPath) {
+        try {
+            // Get repo directory name (e.g., "/home/mmn/github/Foo" -> "-home-mmn-github-Foo")
+            const repoDir = repoPath.replace(/\//g, '-');
+            const sessionDir = path.join(`/home/${username}/.claude/projects`, repoDir);
+
+            // List all JSONL files
+            const files = await fs.readdir(sessionDir);
+            const jsonlFiles = files.filter(f => f.endsWith('.jsonl'));
+
+            if (jsonlFiles.length === 0) {
+                return null;
+            }
+
+            // Get stats for each file
+            const fileStats = await Promise.all(
+                jsonlFiles.map(async (file) => {
+                    const filePath = path.join(sessionDir, file);
+                    const stats = await fs.stat(filePath);
+                    return {
+                        sessionId: file.replace('.jsonl', ''),
+                        mtime: stats.mtime
+                    };
+                })
+            );
+
+            // Sort by modification time (newest first)
+            fileStats.sort((a, b) => b.mtime - a.mtime);
+
+            return fileStats[0].sessionId;
+
+        } catch (error) {
+            logger.error(`Failed to find newest session in ${repoPath}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Spawn NEW Claude process in PTY for interactive session
+     * Creates a brand new Claude session with full repo context
+     *
      * @param {string} username - User who owns the session
      * @param {string} repoPath - Repository path (working directory)
-     * @returns {Promise<void>}
+     * @returns {Promise<string>} - The new session ID
      */
-    async spawnClaudeSession(sessionId, username, repoPath) {
-        if (this.processes.has(sessionId)) {
-            logger.warn(`Claude PTY already exists for session ${sessionId}`);
-            return;
-        }
-
+    async spawnNewClaudeSession(username, repoPath) {
         try {
+            logger.info(`Creating NEW Claude session for user=${username}, repo=${repoPath}`);
             const binaryPath = await this.getClaudeBinary(username);
 
-            logger.info(`Spawning Claude PTY for session ${sessionId} as ${username}`);
+            const claudeArgs = [
+                '--verbose',
+                '--dangerously-skip-permissions',
+                '--debug-to-stderr'
+            ];
 
-            // Spawn Claude in PTY as session owner
             const claudePty = pty.spawn('sudo', [
                 '-u', username,
                 binaryPath,
-                '--resume', sessionId,
-                '--input-format', 'stream-json',
-                '--output-format', 'stream-json',
-                '--print',
-                '--debug-to-stderr'
+                ...claudeArgs
             ], {
                 name: 'xterm-color',
                 cols: 80,
-                rows: 24,
+                rows: 30,
                 cwd: repoPath,
-                env: process.env
+                env: {
+                    HOME: `/home/${username}`,
+                    USER: username,
+                    LOGNAME: username,
+                    PATH: process.env.PATH,
+                    SHELL: '/bin/bash'
+                }
             });
 
-            // Track process
-            const processInfo = {
-                pty: claudePty,
-                buffer: '',
-                pending: [],
-                sessionId,
-                username,
-                repoPath
-            };
+            logger.info(`Claude PTY spawned: PID ${claudePty.pid}`);
 
-            this.processes.set(sessionId, processInfo);
+            // Simple approach: wait for initialization, then find session
+            return new Promise((resolve, reject) => {
+                let bypassSent = false;
 
-            // Handle data output (JSONL responses)
-            claudePty.onData((data) => {
-                this.handleClaudeOutput(sessionId, data);
+                // Auto-accept bypass prompt
+                const dataHandler = (data) => {
+                    if (!bypassSent && data.includes('Yes, I accept')) {
+                        logger.info('Auto-accepting bypass permissions...');
+                        setTimeout(() => {
+                            claudePty.write('2\r');
+                            bypassSent = true;
+                            logger.info('Bypass accepted');
+                        }, 500);
+                    }
+                };
+
+                claudePty.onData(dataHandler);
+
+                claudePty.onExit(({ exitCode }) => {
+                    logger.error(`Claude PTY exited during init: code=${exitCode}`);
+                    reject(new Error(`Claude exited during initialization: ${exitCode}`));
+                });
+
+                // Wait 8 seconds for warmup to complete
+                setTimeout(async () => {
+                    try {
+                        // Find newest session JSONL in this repo
+                        const sessionId = await this.findNewestSession(username, repoPath);
+
+                        if (!sessionId) {
+                            claudePty.kill();
+                            return reject(new Error('Could not find new session JSONL file'));
+                        }
+
+                        logger.info(`Found new session: ${sessionId}`);
+
+                        // Store process info
+                        const processInfo = {
+                            pty: claudePty,
+                            username,
+                            repoPath,
+                            sessionId,
+                            createdAt: new Date()
+                        };
+
+                        this.processes.set(sessionId, processInfo);
+
+                        // Remove temp handler, add permanent one
+                        claudePty.removeAllListeners('data');
+                        claudePty.onData((data) => {
+                            logger.debug(`Claude ${sessionId} output: ${data.substring(0, 100)}`);
+                        });
+
+                        claudePty.onExit(({ exitCode }) => {
+                            logger.info(`Claude session ${sessionId} exited: ${exitCode}`);
+                            this.processes.delete(sessionId);
+                            this.emit('session:closed', sessionId, exitCode);
+                        });
+
+                        this.emit('session:ready', sessionId);
+                        resolve(sessionId);
+
+                    } catch (error) {
+                        logger.error('Failed to find session:', error);
+                        claudePty.kill();
+                        reject(error);
+                    }
+                }, 8000);
             });
-
-            // Handle process exit
-            claudePty.onExit(({ exitCode, signal }) => {
-                logger.info(`Claude PTY exited for session ${sessionId}: code=${exitCode}, signal=${signal}`);
-                this.emit('session:closed', sessionId, exitCode);
-                this.processes.delete(sessionId);
-            });
-
-            // Give Claude a moment to initialize
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            logger.info(`Claude PTY ready for session ${sessionId}: PID ${claudePty.pid}`);
-
-            this.emit('session:ready', sessionId);
 
         } catch (error) {
-            logger.error(`Failed to spawn Claude PTY for session ${sessionId}:`, error);
+            logger.error('Failed to spawn Claude session:', error);
             throw error;
         }
     }
 
     /**
-     * Handle output from Claude PTY
-     */
-    handleClaudeOutput(sessionId, data) {
-        const processInfo = this.processes.get(sessionId);
-        if (!processInfo) return;
-
-        processInfo.buffer += data;
-
-        // Parse JSONL lines
-        const lines = processInfo.buffer.split('\n');
-
-        // Keep last incomplete line in buffer
-        processInfo.buffer = lines.pop() || '';
-
-        // Process complete lines
-        lines.forEach(line => {
-            const trimmed = line.trim();
-            if (!trimmed) return;
-
-            try {
-                const message = JSON.parse(trimmed);
-
-                // Emit different events based on message type
-                if (message.type === 'assistant') {
-                    logger.info(`Claude response received for session ${sessionId}`);
-                    this.emit('message:assistant', sessionId, message);
-                } else if (message.type === 'error') {
-                    logger.error(`Claude error in session ${sessionId}:`, message);
-                    this.emit('message:error', sessionId, message);
-                } else {
-                    this.emit('message:other', sessionId, message);
-                }
-
-            } catch (error) {
-                // Not valid JSON, might be debug output or stderr
-                logger.debug(`Non-JSON output from Claude PTY ${sessionId}: ${trimmed}`);
-            }
-        });
-    }
-
-    /**
-     * Send message to Claude via PTY
+     * Send message to Claude via PTY using bracketed paste mode
+     * Based on AgentAPI implementation
      *
      * @param {string} sessionId - Session ID
      * @param {string} message - Message text
@@ -174,34 +222,21 @@ class ClaudePTYInjector extends EventEmitter {
         const processInfo = this.processes.get(sessionId);
 
         if (!processInfo) {
-            // Session not spawned yet, spawn it first
-            throw new Error('Claude PTY session not initialized. Call spawnClaudeSession first.');
+            throw new Error(`Claude PTY session ${sessionId} not found. Create session first.`);
         }
 
         try {
-            // Format as JSONL user message
-            const messageObj = {
-                type: 'user',
-                role: 'user',
-                content: [
-                    {
-                        type: 'text',
-                        text: message
-                    }
-                ],
-                timestamp: new Date().toISOString(),
-                uuid: uuidv4()
-            };
-
-            const jsonLine = JSON.stringify(messageObj);
-
             logger.info(`Sending message to Claude PTY session ${sessionId}`);
             logger.debug(`Message: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`);
 
-            // Write to PTY stdin
-            processInfo.pty.write(jsonLine + '\n');
+            // Use bracketed paste mode (AgentAPI method)
+            // Format: 'x\b' + '\x1b[200~' + message + '\x1b[201~'
+            const formatted = 'x\b\x1b[200~' + message + '\x1b[201~';
 
-            this.emit('message:sent', sessionId, messageObj);
+            processInfo.pty.write(formatted);
+
+            logger.info(`Message sent via bracketed paste to session ${sessionId}`);
+            this.emit('message:sent', sessionId, message);
 
         } catch (error) {
             logger.error(`Failed to send message to Claude PTY ${sessionId}:`, error);
@@ -210,75 +245,59 @@ class ClaudePTYInjector extends EventEmitter {
     }
 
     /**
-     * Send message with file attachment
+     * Close a Claude PTY session
      *
-     * @param {string} sessionId - Session ID
-     * @param {string} message - Message text
-     * @param {string} filePath - Relative path to file in repo
-     * @returns {Promise<void>}
-     */
-    async sendMessageWithFile(sessionId, message, filePath) {
-        const processInfo = this.processes.get(sessionId);
-        if (!processInfo) {
-            throw new Error('Claude PTY session not initialized');
-        }
-
-        try {
-            // Read file content
-            const fullPath = path.join(processInfo.repoPath, filePath);
-            const content = await fs.readFile(fullPath, 'utf8');
-
-            // Format message with file context
-            const messageWithFile = `${message}\n\nFile: ${filePath}\n\`\`\`\n${content}\n\`\`\``;
-
-            return await this.sendMessage(sessionId, messageWithFile);
-        } catch (error) {
-            logger.error('Failed to send message with file:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Close Claude PTY session
+     * @param {string} sessionId - Session ID to close
      */
     closeSession(sessionId) {
         const processInfo = this.processes.get(sessionId);
         if (!processInfo) {
-            return false;
+            logger.warn(`Cannot close session ${sessionId}: not found`);
+            return;
         }
 
         logger.info(`Closing Claude PTY session ${sessionId}`);
 
-        // Send EOF to stdin
-        processInfo.pty.write('\x04'); // Ctrl+D
+        try {
+            processInfo.pty.kill();
+        } catch (error) {
+            logger.error(`Error killing PTY for ${sessionId}:`, error);
+        }
 
-        // Force kill after timeout
-        setTimeout(() => {
-            if (this.processes.has(sessionId)) {
-                logger.warn(`Force killing Claude PTY session ${sessionId}`);
-                processInfo.pty.kill('SIGKILL');
-            }
-        }, 5000);
-
-        return true;
+        this.processes.delete(sessionId);
+        this.emit('session:closed', sessionId, 0);
     }
 
     /**
-     * Check if session has active PTY
+     * Check if session exists
      */
     hasSession(sessionId) {
         return this.processes.has(sessionId);
     }
 
     /**
-     * Validate user has permission to inject into session
+     * Get session info
      */
-    validatePermission(username, sessionOwner) {
-        // Only session owner can inject messages
-        if (username !== sessionOwner) {
-            throw new Error('Permission denied: not session owner');
+    getSessionInfo(sessionId) {
+        const processInfo = this.processes.get(sessionId);
+        if (!processInfo) {
+            return null;
         }
-        return true;
+
+        return {
+            sessionId,
+            username: processInfo.username,
+            repoPath: processInfo.repoPath,
+            createdAt: processInfo.createdAt,
+            pid: processInfo.pty.pid
+        };
+    }
+
+    /**
+     * Get all active session IDs
+     */
+    getActiveSessions() {
+        return Array.from(this.processes.keys());
     }
 
     /**
