@@ -8,14 +8,21 @@ echo "🚀 Claude Code Prompt Injection - Easy Setup"
 echo "============================================="
 echo ""
 
-# Get current user
-CURRENT_USER=$(whoami)
+# Get current user (the real user, not root if running with sudo)
+if [ -n "$SUDO_USER" ]; then
+    CURRENT_USER="$SUDO_USER"
+    USER_HOME=$(eval echo ~$SUDO_USER)
+else
+    CURRENT_USER=$(whoami)
+    USER_HOME="$HOME"
+fi
 echo "✓ Running as user: $CURRENT_USER"
+echo "✓ Home directory: $USER_HOME"
 
 # Find Claude binary
 echo ""
 echo "📍 Locating Claude binary..."
-CLAUDE_BINARY=$(find ~/.vscode-server/extensions/anthropic.claude-code-*/resources/native-binary/claude -type f 2>/dev/null | head -1)
+CLAUDE_BINARY=$(find "$USER_HOME/.vscode-server/extensions/anthropic.claude-code-"*/resources/native-binary/claude -type f 2>/dev/null | head -1)
 
 if [ -z "$CLAUDE_BINARY" ]; then
     echo "❌ ERROR: Could not find Claude binary"

@@ -47,7 +47,9 @@ class ClaudeSessionScanner {
             const { promisify } = require('util');
             const execAsync = promisify(exec);
 
-            const { stdout } = await execAsync(`ps aux | grep "claude.*--resume ${sessionId}" | grep -v grep`);
+            // Find Claude processes for this session, but exclude our PTY injection processes
+            // PTY processes have --dangerously-skip-permissions flag
+            const { stdout } = await execAsync(`ps aux | grep "claude.*--resume ${sessionId}" | grep -v grep | grep -v "dangerously-skip-permissions"`);
             return stdout.trim().length > 0;
         } catch (error) {
             // grep returns exit code 1 when no match

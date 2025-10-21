@@ -191,7 +191,14 @@ function viewClaudeSession(sessionId) {
     document.querySelectorAll('.claude-session-item').forEach(item => {
         item.classList.remove('active');
     });
-    event.currentTarget.classList.add('active');
+
+    // Find and activate the clicked item
+    const clickedItem = Array.from(document.querySelectorAll('.claude-session-item')).find(item => {
+        return item.querySelector('.claude-session-id').textContent === sessionId.substring(0, 8);
+    });
+    if (clickedItem) {
+        clickedItem.classList.add('active');
+    }
 
     // Request conversation
     socket.emit('claude:conversation:read', { sessionId, offset: 0, limit: 100 });
@@ -231,23 +238,27 @@ function renderClaudeConversation(messages) {
     // Render messages
     messages.forEach(msg => {
         const msgDiv = document.createElement('div');
-        msgDiv.className = `conversation-message ${msg.type}`;
+        const msgType = msg.type || msg.message?.role || 'unknown';
+        msgDiv.className = `conversation-message ${msgType}`;
 
-        if (msg.type === 'user') {
+        // Extract content - it's nested under message.content in JSONL format
+        const content = msg.message?.content || msg.content;
+
+        if (msgType === 'user') {
             msgDiv.innerHTML = `
                 <div class="message-header">
                     <span class="message-role">👤 User</span>
                     <span class="message-time">${formatTime(msg.timestamp)}</span>
                 </div>
-                <div class="message-content">${renderMessageContent(msg.content)}</div>
+                <div class="message-content">${renderMessageContent(content)}</div>
             `;
-        } else if (msg.type === 'assistant') {
+        } else if (msgType === 'assistant') {
             msgDiv.innerHTML = `
                 <div class="message-header">
                     <span class="message-role">🤖 Claude</span>
                     <span class="message-time">${formatTime(msg.timestamp)}</span>
                 </div>
-                <div class="message-content">${renderMessageContent(msg.content)}</div>
+                <div class="message-content">${renderMessageContent(content)}</div>
             `;
         }
 
@@ -1115,8 +1126,27 @@ function initSocket() {
     socket.on('claude:conversation:read', ({ sessionId, messages, total, hasMore }) => {
         if (sessionId !== currentClaudeSessionId) return;
 
-        claudeConversation = messages;
-        renderClaudeConversation(messages);
+        // Only re-render if messages actually changed
+        const messagesChanged = !claudeConversation ||
+            claudeConversation.length !== messages.length ||
+            JSON.stringify(claudeConversation[claudeConversation.length - 1]) !==
+            JSON.stringify(messages[messages.length - 1]);
+
+        if (messagesChanged) {
+            claudeConversation = messages;
+            renderClaudeConversation(messages);
+        }
+
+        // If we got an update with new messages, stop polling and hide typing indicator
+        if (messages && messages.length > 0 && window.currentPollInterval) {
+            const lastMsg = messages[messages.length - 1];
+            const msgType = lastMsg.type || lastMsg.message?.role;
+            if (msgType === 'assistant') {
+                clearInterval(window.currentPollInterval);
+                window.currentPollInterval = null;
+                hideTypingIndicator();
+            }
+        }
     });
 
     // Claude session updated
@@ -1407,8 +1437,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (!session.isActive) {
-            alert('Cannot send message to inactive session');
+        if (session.isActive) {
+            alert('⚠️ Cannot send message to active session - VSCode is currently using this session');
             return;
         }
 
@@ -1542,11 +1572,21 @@ document.addEventListener('DOMContentLoaded', () => {
         inputContainer.classList.remove('hidden');
 
         const session = claudeSessions.find(s => s.id === currentClaudeSessionId);
-        if (session && !session.isActive) {
+        if (session && session.isActive) {
+            // Block interaction with ACTIVE sessions (VSCode is using them)
             inputContainer.classList.add('disabled');
+            const textarea = document.getElementById('claude-message-input');
+            if (textarea) {
+                textarea.placeholder = '⚠️ Cannot send messages to active sessions (VSCode is using this session)';
+            }
         } else {
+            // Allow interaction with INACTIVE sessions
             inputContainer.classList.remove('disabled');
-            ptyReady = false; // Will be set to true when PTY initializes
+            const textarea = document.getElementById('claude-message-input');
+            if (textarea) {
+                textarea.placeholder = 'Type your message to Claude...';
+            }
+            ptyReady = false; // Will be initialized on first message send
         }
     };
 
@@ -1586,6 +1626,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Show typing indicator
             showTypingIndicator();
+
+            // Poll for updates since file watcher may not be reliable
+            let pollCount = 0;
+            const maxPolls = 40; // Poll for up to 2 minutes (40 * 3 seconds)
+            const pollInterval = setInterval(() => {
+                pollCount++;
+                if (pollCount >= maxPolls || sessionId !== currentClaudeSessionId) {
+                    clearInterval(pollInterval);
+                    hideTypingIndicator();
+                    return;
+                }
+
+                // Request conversation update
+                socket.emit('claude:conversation:read', {
+                    sessionId,
+                    offset: 0,
+                    limit: 100
+                });
+            }, 3000);
+
+            // Store interval ID so we can cancel it when response arrives
+            window.currentPollInterval = pollInterval;
         }
     });
 
